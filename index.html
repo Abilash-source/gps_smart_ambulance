@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>Smart Traffic Ambulance</title>
+
+    <link rel="stylesheet"
+          href="style.css">
+
+    <!-- Leaflet Map CSS -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+</head>
+
+
+<body>
+
+<div class="container">
+
+    <h1>🚑 Smart Traffic Ambulance</h1>
+
+    <p class="subtitle">
+        Live Ambulance GPS & Traffic Route
+    </p>
+
+
+    <!-- GPS STATUS -->
+
+    <div class="status">
+
+        GPS Status:
+
+        <span id="gpsStatus">
+            NOT STARTED
+        </span>
+
+    </div>
+
+
+    <!-- FIREBASE STATUS -->
+
+    <div class="firebase-status">
+
+        Firebase:
+
+        <span id="firebaseStatus">
+            CONNECTING...
+        </span>
+
+    </div>
+
+
+    <!-- GPS DATA -->
+
+    <div class="data-box">
+
+        <div class="data">
+
+            <h3>Latitude</h3>
+
+            <p id="latitude">
+                --
+            </p>
+
+        </div>
+
+
+        <div class="data">
+
+            <h3>Longitude</h3>
+
+            <p id="longitude">
+                --
+            </p>
+
+        </div>
+
+
+        <div class="data">
+
+            <h3>Accuracy</h3>
+
+            <p id="accuracy">
+                --
+            </p>
+
+        </div>
+
+
+        <div class="data">
+
+            <h3>Last Update</h3>
+
+            <p id="lastUpdate">
+                --
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <!-- MAP -->
+
+    <h2 class="section-title">
+        🗺️ Live Ambulance Map
+    </h2>
+
+    <div id="map"></div>
+
+
+    <!-- NEXT JUNCTION -->
+
+    <div class="route-info">
+
+        <h2>
+            🚦 Route Information
+        </h2>
+
+        <p>
+            Next Junction:
+            <strong id="nextJunction">
+                --
+            </strong>
+        </p>
+
+        <p>
+            Distance:
+            <strong id="junctionDistance">
+                --
+            </strong>
+        </p>
+
+        <p>
+            Route Status:
+            <strong id="routeStatus">
+                WAITING
+            </strong>
+        </p>
+
+    </div>
+
+
+    <!-- BUTTONS -->
+
+    <div class="buttons">
+
+        <button id="startButton">
+
+            START GPS
+
+        </button>
+
+
+        <button id="stopButton"
+                disabled>
+
+            STOP GPS
+
+        </button>
+
+    </div>
+
+
+    <p id="message"></p>
+
+</div>
+
+
+<!-- Firebase + Leaflet -->
+
+<script type="module">
+
+    import { initializeApp }
+
+        from
+        "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+
+
+    import { getDatabase }
+
+        from
+        "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+
+
+    /*
+    ==========================================
+    FIREBASE CONFIGURATION
+    ==========================================
+    */
+
+    const firebaseConfig = {
+
+        apiKey:
+            "AIzaSyCDtZaALGEdyZpwgHlgGVd1AYfmOhi6dZ0",
+
+        authDomain:
+            "smart-traffic-ambalance.firebaseapp.com",
+
+        databaseURL:
+            "https://smart-traffic-ambalance-default-rtdb.asia-southeast1.firebasedatabase.app",
+
+        projectId:
+            "smart-traffic-ambalance",
+
+        storageBucket:
+            "smart-traffic-ambalance.firebasestorage.app",
+
+        messagingSenderId:
+            "220308583511",
+
+        appId:
+            "1:220308583511:web:4433f941507bcda83f9f12"
+
+    };
+
+
+    /*
+    ==========================================
+    INITIALIZE FIREBASE
+    ==========================================
+    */
+
+    const app =
+        initializeApp(firebaseConfig);
+
+
+    const database =
+        getDatabase(app);
+
+
+    /*
+    Make database available
+    to app.js
+    */
+
+    window.firebaseDatabase =
+        database;
+
+
+    /*
+    Firebase status
+    */
+
+    document
+        .getElementById("firebaseStatus")
+        .textContent = "READY";
+
+
+    document
+        .getElementById("firebaseStatus")
+        .style.color = "green";
+
+
+</script>
+
+
+<!-- Leaflet JavaScript -->
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+</script>
+
+
+<!-- Our application -->
+
+<script
+    type="module"
+    src="app.js">
+</script>
+
+
+</body>
+
+</html>
