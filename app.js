@@ -39,6 +39,110 @@ let watchId = null;
 
 
 /* ==============================
+   LIVE MAP
+   ============================== */
+
+let map = null;
+let ambulanceMarker = null;
+let accuracyCircle = null;
+
+
+function initializeMap() {
+
+    const mapElement =
+        document.getElementById("map");
+
+
+    if (!mapElement || !window.L) {
+
+        console.error("Leaflet map library was not loaded.");
+
+        message.textContent =
+            "Map could not be loaded. Check your internet connection and refresh the page.";
+
+        return;
+    }
+
+
+    /*
+       Show a useful default view until the first GPS position arrives.
+       The map moves to the ambulance as soon as GPS is active.
+    */
+    map =
+        L.map("map")
+            .setView([11.0183, 76.9563], 13);
+
+
+    L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+            maxZoom: 19,
+            attribution:
+                "&copy; OpenStreetMap contributors"
+        }
+    )
+        .addTo(map);
+
+
+    /*
+       Leaflet needs a size refresh after the page finishes layout.
+    */
+    window.setTimeout(
+        () => map.invalidateSize(),
+        0
+    );
+}
+
+
+function updateAmbulanceMap(lat, lon, acc) {
+
+    if (!map) {
+        return;
+    }
+
+
+    const ambulanceLocation =
+        [lat, lon];
+
+
+    if (!ambulanceMarker) {
+
+        ambulanceMarker =
+            L.marker(ambulanceLocation)
+                .addTo(map)
+                .bindPopup("Ambulance current location");
+
+
+        accuracyCircle =
+            L.circle(
+                ambulanceLocation,
+                {
+                    radius: acc,
+                    color: "#d32f2f",
+                    fillColor: "#ef5350",
+                    fillOpacity: 0.18,
+                    weight: 2
+                }
+            )
+                .addTo(map);
+    } else {
+
+        ambulanceMarker.setLatLng(ambulanceLocation);
+
+        accuracyCircle
+            .setLatLng(ambulanceLocation)
+            .setRadius(acc);
+    }
+
+
+    map.setView(ambulanceLocation, 17);
+}
+
+
+initializeMap();
+
+
+/* ==============================
    START GPS
    ============================== */
 
@@ -178,6 +282,12 @@ function updateLocation(position) {
 
     message.textContent =
         "Location updated successfully.";
+
+
+    /*
+       Update the map with the same GPS data sent to Firebase.
+    */
+    updateAmbulanceMap(lat, lon, acc);
 
 
     /*
