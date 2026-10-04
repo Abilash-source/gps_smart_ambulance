@@ -13,11 +13,9 @@
     <link rel="stylesheet"
           href="style.css">
 
-    <!-- Leaflet Map CSS -->
-    <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    >
+    <!-- Leaflet -->
+    <link rel="stylesheet"
+          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 </head>
 
@@ -26,258 +24,317 @@
 
 <div class="container">
 
-    <h1>🚑 Smart Traffic Ambulance</h1>
+    <!-- HEADER -->
 
-    <p class="subtitle">
-        Live Ambulance GPS & Traffic Route
-    </p>
+    <header>
 
+        <h1>🚑 Smart Traffic Ambulance</h1>
 
-    <!-- GPS STATUS -->
+        <p>
+            Intelligent Ambulance Traffic Priority System
+        </p>
 
-    <div class="status">
-
-        GPS Status:
-
-        <span id="gpsStatus">
-            NOT STARTED
-        </span>
-
-    </div>
+    </header>
 
 
-    <!-- FIREBASE STATUS -->
+    <!-- STATUS -->
 
-    <div class="firebase-status">
+    <section class="status-section">
 
-        Firebase:
+        <div class="status-card">
 
-        <span id="firebaseStatus">
-            CONNECTING...
-        </span>
+            <h3>GPS Status</h3>
 
-    </div>
+            <span id="gpsStatus"
+                  class="status stopped">
+
+                STOPPED
+
+            </span>
+
+        </div>
+
+
+        <div class="status-card">
+
+            <h3>Firebase</h3>
+
+            <span id="firebaseStatus"
+                  class="status connecting">
+
+                CONNECTING
+
+            </span>
+
+        </div>
+
+    </section>
 
 
     <!-- GPS DATA -->
 
-    <div class="data-box">
+    <section class="data-section">
 
-        <div class="data">
+        <div class="data-card">
 
             <h3>Latitude</h3>
 
-            <p id="latitude">
-                --
-            </p>
+            <p id="latitude">--</p>
 
         </div>
 
 
-        <div class="data">
+        <div class="data-card">
 
             <h3>Longitude</h3>
 
-            <p id="longitude">
-                --
-            </p>
+            <p id="longitude">--</p>
 
         </div>
 
 
-        <div class="data">
+        <div class="data-card">
 
             <h3>Accuracy</h3>
 
-            <p id="accuracy">
-                --
-            </p>
+            <p id="accuracy">--</p>
 
         </div>
 
 
-        <div class="data">
+        <div class="data-card">
 
             <h3>Last Update</h3>
 
-            <p id="lastUpdate">
-                --
-            </p>
+            <p id="lastUpdate">--</p>
 
         </div>
 
-    </div>
+    </section>
+
+
+    <!-- DESTINATION -->
+
+    <section class="destination-section">
+
+        <h2>🏥 Select Destination</h2>
+
+        <p class="section-description">
+            Select the hospital to calculate the ambulance route.
+        </p>
+
+
+        <div class="destination-controls">
+
+            <select id="hospitalSelect">
+
+                <option value="">
+                    Select Hospital
+                </option>
+
+            </select>
+
+
+            <button id="routeButton"
+                    class="route-button">
+
+                🗺️ CALCULATE ROUTE
+
+            </button>
+
+        </div>
+
+    </section>
 
 
     <!-- MAP -->
 
-    <h2 class="section-title">
-        🗺️ Live Ambulance Map
-    </h2>
+    <section class="map-section">
 
-    <div id="map"></div>
+        <h2>🗺️ Live Route Map</h2>
+
+        <div id="map"></div>
+
+    </section>
 
 
-    <!-- NEXT JUNCTION -->
+    <!-- LEGEND -->
 
-    <div class="route-info">
+    <div class="legend">
 
-        <h2>
-            🚦 Route Information
-        </h2>
+        <div>
+            <span class="legend-junction"></span>
+            Traffic Junction
+        </div>
 
-        <p>
-            Next Junction:
-            <strong id="nextJunction">
-                --
-            </strong>
-        </p>
 
-        <p>
-            Distance:
-            <strong id="junctionDistance">
-                --
-            </strong>
-        </p>
+        <div>
+            <span class="legend-ambulance"></span>
+            Ambulance
+        </div>
 
-        <p>
-            Route Status:
-            <strong id="routeStatus">
-                WAITING
-            </strong>
-        </p>
+
+        <div>
+            <span class="legend-hospital"></span>
+            Hospital
+        </div>
+
+
+        <div>
+            <span class="legend-route"></span>
+            Ambulance Route
+        </div>
 
     </div>
 
 
+    <!-- ROUTE DETAILS -->
+
+    <section class="route-section">
+
+        <h2>🚦 Route Information</h2>
+
+
+        <div class="route-grid">
+
+            <div class="route-card">
+
+                <h3>Destination</h3>
+
+                <p id="destinationName">
+                    Not selected
+                </p>
+
+            </div>
+
+
+            <div class="route-card">
+
+                <h3>Route Distance</h3>
+
+                <p id="routeDistance">
+                    --
+                </p>
+
+            </div>
+
+
+            <div class="route-card">
+
+                <h3>Estimated Time</h3>
+
+                <p id="routeTime">
+                    --
+                </p>
+
+            </div>
+
+
+            <div class="route-card">
+
+                <h3>Next Junction</h3>
+
+                <p id="nextJunction">
+                    Waiting for GPS
+                </p>
+
+            </div>
+
+
+            <div class="route-card">
+
+                <h3>Distance to Junction</h3>
+
+                <p id="junctionDistance">
+                    --
+                </p>
+
+            </div>
+
+
+            <div class="route-card">
+
+                <h3>Traffic Priority</h3>
+
+                <p id="routeStatus">
+                    Normal
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- JUNCTION SEQUENCE -->
+
+    <section class="sequence-section">
+
+        <h2>🚦 Junctions on Route</h2>
+
+        <div id="junctionSequence"
+             class="junction-sequence">
+
+            Select a hospital to calculate the route.
+
+        </div>
+
+    </section>
+
+
     <!-- BUTTONS -->
 
-    <div class="buttons">
+    <div class="button-section">
 
-        <button id="startButton">
+        <button id="startButton"
+                class="start-button">
 
-            START GPS
+            ▶ START GPS
 
         </button>
 
 
         <button id="stopButton"
+                class="stop-button"
                 disabled>
 
-            STOP GPS
+            ■ STOP GPS
 
         </button>
 
     </div>
 
 
-    <p id="message"></p>
+    <!-- MESSAGE -->
+
+    <div id="message"
+         class="message">
+
+        Select a hospital and start GPS.
+
+    </div>
+
+
+    <footer>
+
+        Smart Traffic Ambulance |
+        ESP32 + GPS + Firebase
+
+    </footer>
 
 </div>
 
 
-<!-- Firebase + Leaflet -->
+<!-- Leaflet -->
 
-<script type="module">
-
-    import { initializeApp }
-
-        from
-        "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 
-    import { getDatabase }
+<!-- Application -->
 
-        from
-        "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
-
-
-    /*
-    ==========================================
-    FIREBASE CONFIGURATION
-    ==========================================
-    */
-
-    const firebaseConfig = {
-
-        apiKey:
-            "AIzaSyCDtZaALGEdyZpwgHlgGVd1AYfmOhi6dZ0",
-
-        authDomain:
-            "smart-traffic-ambalance.firebaseapp.com",
-
-        databaseURL:
-            "https://smart-traffic-ambalance-default-rtdb.asia-southeast1.firebasedatabase.app",
-
-        projectId:
-            "smart-traffic-ambalance",
-
-        storageBucket:
-            "smart-traffic-ambalance.firebasestorage.app",
-
-        messagingSenderId:
-            "220308583511",
-
-        appId:
-            "1:220308583511:web:4433f941507bcda83f9f12"
-
-    };
-
-
-    /*
-    ==========================================
-    INITIALIZE FIREBASE
-    ==========================================
-    */
-
-    const app =
-        initializeApp(firebaseConfig);
-
-
-    const database =
-        getDatabase(app);
-
-
-    /*
-    Make database available
-    to app.js
-    */
-
-    window.firebaseDatabase =
-        database;
-
-
-    /*
-    Firebase status
-    */
-
-    document
-        .getElementById("firebaseStatus")
-        .textContent = "READY";
-
-
-    document
-        .getElementById("firebaseStatus")
-        .style.color = "green";
-
-
-</script>
-
-
-<!-- Leaflet JavaScript -->
-
-<script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-</script>
-
-
-<!-- Our application -->
-
-<script
-    type="module"
-    src="app.js">
-</script>
-
+<script type="module"
+        src="app.js"></script>
 
 </body>
 
