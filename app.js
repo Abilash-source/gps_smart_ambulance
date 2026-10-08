@@ -287,3 +287,4 @@ function updateAmbulanceMarker(
 
 // Start map
 initializeMap();
+
