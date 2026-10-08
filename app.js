@@ -99,6 +99,21 @@ const stopButton =
 const messageElement =
     document.getElementById("message");
 
+    const hospitalSelect =
+    document.getElementById("hospitalSelect");
+
+const routeButton =
+    document.getElementById("routeButton");
+
+const destinationNameElement =
+    document.getElementById("destinationName");
+
+const routeDistanceElement =
+    document.getElementById("routeDistance");
+
+const routeTimeElement =
+    document.getElementById("routeTime");
+
 
 // =====================================================
 // APPLICATION VARIABLES
@@ -115,6 +130,26 @@ let map = null;
 let ambulanceMarker = null;
 
 let ambulanceAccuracyCircle = null;
+
+// =====================================================
+// FIXED HOSPITALS
+// These coordinates never change.
+// =====================================================
+
+const hospitals = [
+    {
+        id: "H1",
+        name: "Demo Hospital A",
+        latitude: 11.0206146,
+        longitude: 76.9334139
+    },
+    {
+        id: "H2",
+        name: "Demo Hospital B",
+        latitude: 11.019335,
+        longitude: 76.938563
+    }
+];
 
 
 // =====================================================
@@ -806,6 +841,34 @@ stopButton.addEventListener(
 // =====================================================
 // INITIAL PAGE STATE
 // =====================================================
+// INITIALIZE HOSPITAL DROPDOWN
+// =====================================================
+
+function initializeHospitalSelect() {
+
+    hospitalSelect.innerHTML =
+        '<option value="">Select Hospital</option>';
+
+    hospitals.forEach(
+        (hospital) => {
+
+            const option =
+                document.createElement("option");
+
+            option.value =
+                hospital.id;
+
+            option.textContent =
+                hospital.name;
+
+            hospitalSelect.appendChild(
+                option
+            );
+        }
+    );
+}
+// =====================================================
+initializeHospitalSelect();
 
 resetGPSDisplay();
 
