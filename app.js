@@ -163,6 +163,12 @@ const hospitals = [
         name: "Demo Hospital B",
         latitude: 11.019335,
         longitude: 76.938563
+    },
+    {
+        id: "H3",
+        name: "Demo Hospital C",
+        latitude: 11.017290,
+        longitude: 76.9352481
     }
 ];
 
