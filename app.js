@@ -1,7 +1,23 @@
 // =====================================================
 // SMART TRAFFIC AMBULANCE
+// =====================================================
 // CURRENT STAGE:
-// Firebase + Live Browser GPS + Leaflet Ambulance Marker
+// Firebase + Live Browser GPS + Leaflet + OSRM Routing
+//
+// FLOW:
+// Live Browser GPS
+//       ↓
+// Firebase
+//       ↓
+// Select Fixed Hospital
+//       ↓
+// OSRM
+//       ↓
+// Actual Road Route
+//       ↓
+// Route Line on Leaflet
+//       ↓
+// Distance + Estimated Time
 // =====================================================
 
 
@@ -9,16 +25,16 @@
 // FIREBASE IMPORTS
 // =====================================================
 
-import {
-    initializeApp
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
+import { initializeApp } from
+    "https://www.gstatic.com/firebasejs/12.0.0/firebase-app.js";
 
 import {
     getDatabase,
     ref,
     set,
     onValue
-} from "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
+} from
+    "https://www.gstatic.com/firebasejs/12.0.0/firebase-database.js";
 
 
 // =====================================================
@@ -26,30 +42,15 @@ import {
 // =====================================================
 
 const firebaseConfig = {
-
-    apiKey:
-        "AIzaSyCDzTaALGEdyZpwgHlgGVd1AYfmOhi6dZ0",
-
-    authDomain:
-        "smart-traffic-ambalance.firebaseapp.com",
-
+    apiKey: "AIzaSyCDtZaALGEdyZpwgHlgGVd1AYfmOhi6dZ0",
+    authDomain: "smart-traffic-ambalance.firebaseapp.com",
     databaseURL:
         "https://smart-traffic-ambalance-default-rtdb.asia-southeast1.firebasedatabase.app",
-
-    projectId:
-        "smart-traffic-ambalance",
-
-    storageBucket:
-        "smart-traffic-ambalance.firebasestorage.app",
-
-    messagingSenderId:
-        "220308583511",
-
-    appId:
-        "1:220308583511:web:4433f941507bcda83f9f12",
-
-    measurementId:
-        "G-D64VYM5TGJ"
+    projectId: "smart-traffic-ambalance",
+    storageBucket: "smart-traffic-ambalance.firebasestorage.app",
+    messagingSenderId: "220308583511",
+    appId: "1:220308583511:web:4433f941507bcda83f9f12",
+    measurementId: "G-D64VYM5TGJ"
 };
 
 
@@ -57,15 +58,10 @@ const firebaseConfig = {
 // INITIALIZE FIREBASE
 // =====================================================
 
-const firebaseApp =
-    initializeApp(firebaseConfig);
+const firebaseApp = initializeApp(firebaseConfig);
+const database = getDatabase(firebaseApp);
 
-const database =
-    getDatabase(firebaseApp);
-
-console.log(
-    "Firebase initialized successfully"
-);
+console.log("Firebase initialized successfully");
 
 
 // =====================================================
@@ -99,7 +95,7 @@ const stopButton =
 const messageElement =
     document.getElementById("message");
 
-    const hospitalSelect =
+const hospitalSelect =
     document.getElementById("hospitalSelect");
 
 const routeButton =
@@ -114,22 +110,41 @@ const routeDistanceElement =
 const routeTimeElement =
     document.getElementById("routeTime");
 
+const nextJunctionElement =
+    document.getElementById("nextJunction");
+
+const junctionDistanceElement =
+    document.getElementById("junctionDistance");
+
+const routeStatusElement =
+    document.getElementById("routeStatus");
+
+const junctionSequenceElement =
+    document.getElementById("junctionSequence");
+
 
 // =====================================================
 // APPLICATION VARIABLES
 // =====================================================
 
 let gpsWatchId = null;
-
 let gpsSessionStarted = false;
-
 let lastGpsTimestamp = null;
 
 let map = null;
 
 let ambulanceMarker = null;
-
 let ambulanceAccuracyCircle = null;
+
+let currentAmbulanceLocation = null;
+
+let selectedHospital = null;
+
+let routeLine = null;
+let routeData = null;
+
+let hospitalMarker = null;
+
 
 // =====================================================
 // FIXED HOSPITALS
@@ -153,28 +168,75 @@ const hospitals = [
 
 
 // =====================================================
+// OSRM CONFIGURATION
+// =====================================================
+
+const OSRM_BASE_URL =
+    "https://router.project-osrm.org/route/v1/driving";
+
+
+// =====================================================
 // INITIAL UI STATE
 // =====================================================
 
 function resetGPSDisplay() {
 
-    gpsStatus.textContent =
-        "WAITING FOR GPS";
+    if (gpsStatus) {
+        gpsStatus.textContent = "WAITING FOR GPS";
+        gpsStatus.className = "status stopped";
+    }
 
-    gpsStatus.className =
-        "status stopped";
+    if (latitudeElement) {
+        latitudeElement.textContent = "--";
+    }
 
-    latitudeElement.textContent =
-        "--";
+    if (longitudeElement) {
+        longitudeElement.textContent = "--";
+    }
 
-    longitudeElement.textContent =
-        "--";
+    if (accuracyElement) {
+        accuracyElement.textContent = "--";
+    }
 
-    accuracyElement.textContent =
-        "--";
+    if (lastUpdateElement) {
+        lastUpdateElement.textContent = "--";
+    }
+}
 
-    lastUpdateElement.textContent =
-        "--";
+
+// =====================================================
+// RESET ROUTE INFORMATION
+// =====================================================
+
+function resetRouteDisplay() {
+
+    if (destinationNameElement) {
+        destinationNameElement.textContent = "--";
+    }
+
+    if (routeDistanceElement) {
+        routeDistanceElement.textContent = "--";
+    }
+
+    if (routeTimeElement) {
+        routeTimeElement.textContent = "--";
+    }
+
+    if (nextJunctionElement) {
+        nextJunctionElement.textContent = "--";
+    }
+
+    if (junctionDistanceElement) {
+        junctionDistanceElement.textContent = "--";
+    }
+
+    if (routeStatusElement) {
+        routeStatusElement.textContent = "NO ROUTE";
+    }
+
+    if (junctionSequenceElement) {
+        junctionSequenceElement.textContent = "--";
+    }
 }
 
 
@@ -195,11 +257,10 @@ onValue(
                 "Firebase database connected successfully"
             );
 
-            firebaseStatus.textContent =
-                "CONNECTED";
-
-            firebaseStatus.style.color =
-                "green";
+            if (firebaseStatus) {
+                firebaseStatus.textContent = "CONNECTED";
+                firebaseStatus.style.color = "green";
+            }
 
         } else {
 
@@ -207,11 +268,10 @@ onValue(
                 "Firebase database disconnected"
             );
 
-            firebaseStatus.textContent =
-                "DISCONNECTED";
-
-            firebaseStatus.style.color =
-                "red";
+            if (firebaseStatus) {
+                firebaseStatus.textContent = "DISCONNECTED";
+                firebaseStatus.style.color = "red";
+            }
         }
     }
 );
@@ -225,12 +285,9 @@ function initializeMap() {
 
     if (typeof L === "undefined") {
 
-        console.error(
-            "Leaflet is not loaded."
-        );
+        console.error("Leaflet is not loaded.");
 
         if (messageElement) {
-
             messageElement.textContent =
                 "Leaflet failed to load.";
         }
@@ -238,34 +295,27 @@ function initializeMap() {
         return;
     }
 
-
     map = L.map("map").setView(
         [11.018000, 76.934700],
         17
     );
 
-
     L.tileLayer(
         "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
         {
             maxZoom: 20,
-
             attribution:
                 "&copy; OpenStreetMap contributors"
         }
     ).addTo(map);
 
-
-    console.log(
-        "Map initialized successfully"
-    );
-
+    console.log("Map initialized successfully");
 
     setTimeout(
         () => {
-
-            map.invalidateSize();
-
+            if (map) {
+                map.invalidateSize();
+            }
         },
         500
     );
@@ -284,70 +334,47 @@ function updateAmbulanceMarker(
 
     if (!map) {
 
-        console.error(
-            "Map is not initialized."
-        );
-
+        console.error("Map is not initialized.");
         return;
     }
-
 
     const position = [
         latitude,
         longitude
     ];
 
-
-    // -------------------------------------------------
-    // CREATE MARKER
-    // -------------------------------------------------
-
     if (!ambulanceMarker) {
 
         ambulanceMarker =
             L.marker(position)
                 .addTo(map)
-                .bindPopup(
-                    "<b>🚑 Ambulance</b>"
-                );
-
+                .bindPopup("<b>🚑 Ambulance</b>");
 
         ambulanceAccuracyCircle =
             L.circle(
                 position,
                 {
-                    radius: accuracy,
-
+                    radius: Math.max(accuracy, 1),
                     color: "#d32f2f",
-
                     fillColor: "#d32f2f",
-
                     fillOpacity: 0.15
                 }
             ).addTo(map);
-
-
-        console.log(
-            "Ambulance marker created."
-        );
-
 
         map.setView(
             position,
             17
         );
 
+        console.log(
+            "Ambulance marker created."
+        );
 
     } else {
-
-        // -------------------------------------------------
-        // MOVE EXISTING MARKER
-        // -------------------------------------------------
 
         ambulanceMarker.setLatLng(
             position
         );
-
 
         if (ambulanceAccuracyCircle) {
 
@@ -356,14 +383,9 @@ function updateAmbulanceMarker(
             );
 
             ambulanceAccuracyCircle.setRadius(
-                accuracy
+                Math.max(accuracy, 1)
             );
         }
-
-
-        console.log(
-            "Ambulance marker updated."
-        );
     }
 }
 
@@ -378,7 +400,6 @@ function removeAmbulanceMarker() {
         return;
     }
 
-
     if (ambulanceMarker) {
 
         map.removeLayer(
@@ -387,7 +408,6 @@ function removeAmbulanceMarker() {
 
         ambulanceMarker = null;
     }
-
 
     if (ambulanceAccuracyCircle) {
 
@@ -398,10 +418,587 @@ function removeAmbulanceMarker() {
         ambulanceAccuracyCircle = null;
     }
 
-
     console.log(
         "Ambulance marker removed."
     );
+}
+
+
+// =====================================================
+// DRAW / UPDATE HOSPITAL MARKER
+// =====================================================
+
+function updateHospitalMarker(hospital) {
+
+    if (!map || !hospital) {
+        return;
+    }
+
+    const position = [
+        hospital.latitude,
+        hospital.longitude
+    ];
+
+    if (!hospitalMarker) {
+
+        hospitalMarker =
+            L.marker(position)
+                .addTo(map)
+                .bindPopup(
+                    `<b>🏥 ${hospital.name}</b>`
+                );
+
+    } else {
+
+        hospitalMarker.setLatLng(position);
+
+        hospitalMarker.bindPopup(
+            `<b>🏥 ${hospital.name}</b>`
+        );
+    }
+}
+
+
+// =====================================================
+// REMOVE ROUTE
+// =====================================================
+
+function clearRoute() {
+
+    if (routeLine && map) {
+
+        map.removeLayer(routeLine);
+        routeLine = null;
+    }
+
+    routeData = null;
+
+    if (routeStatusElement) {
+        routeStatusElement.textContent = "NO ROUTE";
+    }
+
+    if (routeDistanceElement) {
+        routeDistanceElement.textContent = "--";
+    }
+
+    if (routeTimeElement) {
+        routeTimeElement.textContent = "--";
+    }
+
+    console.log("Route cleared.");
+}
+
+
+// =====================================================
+// FORMAT ROUTE TIME
+// =====================================================
+
+function formatRouteTime(seconds) {
+
+    if (!Number.isFinite(seconds)) {
+        return "--";
+    }
+
+    const totalMinutes =
+        Math.round(seconds / 60);
+
+    if (totalMinutes < 1) {
+        return "Less than 1 min";
+    }
+
+    const hours =
+        Math.floor(totalMinutes / 60);
+
+    const minutes =
+        totalMinutes % 60;
+
+    if (hours > 0) {
+
+        if (minutes > 0) {
+            return `${hours} hr ${minutes} min`;
+        }
+
+        return `${hours} hr`;
+    }
+
+    return `${minutes} min`;
+}
+
+
+// =====================================================
+// FORMAT ROUTE DISTANCE
+// =====================================================
+
+function formatRouteDistance(meters) {
+
+    if (!Number.isFinite(meters)) {
+        return "--";
+    }
+
+    const kilometers =
+        meters / 1000;
+
+    if (kilometers < 1) {
+        return `${Math.round(meters)} m`;
+    }
+
+    return `${kilometers.toFixed(2)} km`;
+}
+
+
+// =====================================================
+// CALCULATE ACTUAL ROAD ROUTE USING OSRM
+// =====================================================
+
+async function calculateRoute() {
+
+    // -------------------------------------------------
+    // CHECK MAP
+    // -------------------------------------------------
+
+    if (!map) {
+
+        console.error(
+            "Cannot calculate route: map is not initialized."
+        );
+
+        if (messageElement) {
+            messageElement.textContent =
+                "Map is not ready.";
+        }
+
+        return;
+    }
+
+
+    // -------------------------------------------------
+    // CHECK LIVE GPS
+    // -------------------------------------------------
+
+    if (!currentAmbulanceLocation) {
+
+        console.warn(
+            "Route requested before a GPS location was received."
+        );
+
+        if (messageElement) {
+            messageElement.textContent =
+                "Start GPS and wait for the current ambulance location first.";
+        }
+
+        return;
+    }
+
+
+    // -------------------------------------------------
+    // CHECK HOSPITAL
+    // -------------------------------------------------
+
+    if (!selectedHospital) {
+
+        console.warn(
+            "Route requested without selecting a hospital."
+        );
+
+        if (messageElement) {
+            messageElement.textContent =
+                "Please select a hospital first.";
+        }
+
+        return;
+    }
+
+
+    // -------------------------------------------------
+    // CURRENT AMBULANCE LOCATION
+    // -------------------------------------------------
+
+    const ambulanceLatitude =
+        Number(currentAmbulanceLocation.latitude);
+
+    const ambulanceLongitude =
+        Number(currentAmbulanceLocation.longitude);
+
+
+    // -------------------------------------------------
+    // FIXED HOSPITAL LOCATION
+    // -------------------------------------------------
+
+    const hospitalLatitude =
+        Number(selectedHospital.latitude);
+
+    const hospitalLongitude =
+        Number(selectedHospital.longitude);
+
+
+    // -------------------------------------------------
+    // VALIDATE COORDINATES
+    // -------------------------------------------------
+
+    if (
+        !Number.isFinite(ambulanceLatitude) ||
+        !Number.isFinite(ambulanceLongitude) ||
+        !Number.isFinite(hospitalLatitude) ||
+        !Number.isFinite(hospitalLongitude)
+    ) {
+
+        console.error(
+            "Invalid coordinates."
+        );
+
+        if (messageElement) {
+            messageElement.textContent =
+                "Invalid GPS or hospital coordinates.";
+        }
+
+        return;
+    }
+
+
+    // -------------------------------------------------
+    // DISABLE BUTTON DURING REQUEST
+    // -------------------------------------------------
+
+    if (routeButton) {
+        routeButton.disabled = true;
+    }
+
+    if (messageElement) {
+        messageElement.textContent =
+            "Calculating actual road route...";
+    }
+
+    if (routeStatusElement) {
+        routeStatusElement.textContent =
+            "CALCULATING...";
+    }
+
+
+    // -------------------------------------------------
+    // BUILD OSRM REQUEST
+    //
+    // IMPORTANT:
+    // OSRM expects:
+    // longitude,latitude
+    // NOT latitude,longitude
+    // -------------------------------------------------
+
+    const osrmUrl =
+        `${OSRM_BASE_URL}/` +
+        `${ambulanceLongitude},${ambulanceLatitude};` +
+        `${hospitalLongitude},${hospitalLatitude}` +
+        `?overview=full&geometries=geojson&steps=true`;
+
+    console.log(
+        "OSRM ROUTE REQUEST:",
+        osrmUrl
+    );
+
+
+    try {
+
+        // -------------------------------------------------
+        // REQUEST OSRM
+        // -------------------------------------------------
+
+        const response =
+            await fetch(osrmUrl);
+
+
+        // -------------------------------------------------
+        // HTTP ERROR
+        // -------------------------------------------------
+
+        if (!response.ok) {
+
+            throw new Error(
+                `OSRM HTTP error: ${response.status}`
+            );
+        }
+
+
+        // -------------------------------------------------
+        // READ JSON
+        // -------------------------------------------------
+
+        const data =
+            await response.json();
+
+        console.log(
+            "OSRM RESPONSE:",
+            data
+        );
+
+
+        // -------------------------------------------------
+        // CHECK OSRM STATUS
+        // -------------------------------------------------
+
+        if (
+            data.code !== "Ok" ||
+            !Array.isArray(data.routes) ||
+            data.routes.length === 0
+        ) {
+
+            throw new Error(
+                data.message ||
+                "OSRM did not return a valid route."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // GET BEST ROUTE
+        // -------------------------------------------------
+
+        const route =
+            data.routes[0];
+
+
+        if (
+            !route.geometry ||
+            !route.geometry.coordinates ||
+            route.geometry.coordinates.length === 0
+        ) {
+
+            throw new Error(
+                "OSRM returned a route without geometry."
+            );
+        }
+
+
+        // -------------------------------------------------
+        // SAVE ROUTE DATA
+        // -------------------------------------------------
+
+        routeData = {
+            distance: route.distance,
+            duration: route.duration,
+            geometry: route.geometry,
+            legs: route.legs || [],
+            waypoints: data.waypoints || []
+        };
+
+
+        // -------------------------------------------------
+        // REMOVE OLD ROUTE
+        // -------------------------------------------------
+
+        if (routeLine) {
+
+            map.removeLayer(routeLine);
+            routeLine = null;
+        }
+
+
+        // -------------------------------------------------
+        // DRAW ACTUAL ROAD ROUTE
+        // -------------------------------------------------
+
+        routeLine =
+            L.geoJSON(
+                route.geometry,
+                {
+                    style: {
+                        weight: 6,
+                        opacity: 0.85
+                    }
+                }
+            ).addTo(map);
+
+
+        // -------------------------------------------------
+        // UPDATE HOSPITAL MARKER
+        // -------------------------------------------------
+
+        updateHospitalMarker(
+            selectedHospital
+        );
+
+
+        // -------------------------------------------------
+        // FIT MAP TO ROUTE
+        // -------------------------------------------------
+
+        const routeBounds =
+            routeLine.getBounds();
+
+        if (routeBounds.isValid()) {
+
+            map.fitBounds(
+                routeBounds,
+                {
+                    padding: [40, 40]
+                }
+            );
+        }
+
+
+        // -------------------------------------------------
+        // DISTANCE
+        // -------------------------------------------------
+
+        const distanceText =
+            formatRouteDistance(
+                route.distance
+            );
+
+
+        // -------------------------------------------------
+        // ESTIMATED TIME
+        // -------------------------------------------------
+
+        const timeText =
+            formatRouteTime(
+                route.duration
+            );
+
+
+        // -------------------------------------------------
+        // UPDATE UI
+        // -------------------------------------------------
+
+        if (destinationNameElement) {
+
+            destinationNameElement.textContent =
+                selectedHospital.name;
+        }
+
+        if (routeDistanceElement) {
+
+            routeDistanceElement.textContent =
+                distanceText;
+        }
+
+        if (routeTimeElement) {
+
+            routeTimeElement.textContent =
+                timeText;
+        }
+
+        if (routeStatusElement) {
+
+            routeStatusElement.textContent =
+                "ROUTE READY";
+        }
+
+
+        // -------------------------------------------------
+        // JUNCTION SECTION
+        //
+        // Junction logic will be added later.
+        // -------------------------------------------------
+
+        if (nextJunctionElement) {
+            nextJunctionElement.textContent =
+                "Not calculated";
+        }
+
+        if (junctionDistanceElement) {
+            junctionDistanceElement.textContent =
+                "--";
+        }
+
+        if (junctionSequenceElement) {
+            junctionSequenceElement.textContent =
+                "Junction analysis pending";
+        }
+
+
+        // -------------------------------------------------
+        // SUCCESS MESSAGE
+        // -------------------------------------------------
+
+        if (messageElement) {
+
+            messageElement.textContent =
+                `Actual road route calculated to ${selectedHospital.name}.`;
+        }
+
+
+        // -------------------------------------------------
+        // CONSOLE INFORMATION
+        // -------------------------------------------------
+
+        console.log(
+            "=========================================="
+        );
+
+        console.log(
+            "OSRM ROUTE CALCULATED SUCCESSFULLY"
+        );
+
+        console.log(
+            "FROM:",
+            ambulanceLatitude,
+            ambulanceLongitude
+        );
+
+        console.log(
+            "TO:",
+            hospitalLatitude,
+            hospitalLongitude
+        );
+
+        console.log(
+            "DESTINATION:",
+            selectedHospital.name
+        );
+
+        console.log(
+            "DISTANCE:",
+            distanceText
+        );
+
+        console.log(
+            "ESTIMATED TIME:",
+            timeText
+        );
+
+        console.log(
+            "ROUTE POINTS:",
+            route.geometry.coordinates.length
+        );
+
+        console.log(
+            "=========================================="
+        );
+
+    } catch (error) {
+
+        // -------------------------------------------------
+        // ROUTE ERROR
+        // -------------------------------------------------
+
+        console.error(
+            "OSRM ROUTE CALCULATION ERROR:",
+            error
+        );
+
+        clearRoute();
+
+        if (messageElement) {
+
+            messageElement.textContent =
+                `Route calculation failed: ${error.message}`;
+        }
+
+        if (routeStatusElement) {
+
+            routeStatusElement.textContent =
+                "ROUTE ERROR";
+        }
+
+    } finally {
+
+        // -------------------------------------------------
+        // ENABLE BUTTON AGAIN
+        // -------------------------------------------------
+
+        if (routeButton) {
+            routeButton.disabled = false;
+        }
+    }
 }
 
 
@@ -435,8 +1032,17 @@ function startGPS() {
             "Geolocation is not supported."
         );
 
-        gpsStatus.textContent =
-            "NOT SUPPORTED";
+        if (gpsStatus) {
+            gpsStatus.textContent =
+                "NOT SUPPORTED";
+            gpsStatus.className =
+                "status stopped";
+        }
+
+        if (messageElement) {
+            messageElement.textContent =
+                "Geolocation is not supported by this browser.";
+        }
 
         return;
     }
@@ -450,41 +1056,56 @@ function startGPS() {
 
     lastGpsTimestamp = null;
 
+    currentAmbulanceLocation = null;
+
 
     // -------------------------------------------------
-    // RESET OLD DISPLAY
+    // CLEAR OLD ROUTE
     // -------------------------------------------------
 
-    latitudeElement.textContent =
-        "--";
-
-    longitudeElement.textContent =
-        "--";
-
-    accuracyElement.textContent =
-        "--";
-
-    lastUpdateElement.textContent =
-        "--";
+    clearRoute();
 
 
-    gpsStatus.textContent =
-        "STARTING...";
+    // -------------------------------------------------
+    // RESET GPS DISPLAY
+    // -------------------------------------------------
+
+    if (latitudeElement) {
+        latitudeElement.textContent = "--";
+    }
+
+    if (longitudeElement) {
+        longitudeElement.textContent = "--";
+    }
+
+    if (accuracyElement) {
+        accuracyElement.textContent = "--";
+    }
+
+    if (lastUpdateElement) {
+        lastUpdateElement.textContent = "--";
+    }
+
+    if (gpsStatus) {
+        gpsStatus.textContent =
+            "STARTING...";
+    }
 
 
     // -------------------------------------------------
     // BUTTON STATE
     // -------------------------------------------------
 
-    startButton.disabled =
-        true;
+    if (startButton) {
+        startButton.disabled = true;
+    }
 
-    stopButton.disabled =
-        false;
+    if (stopButton) {
+        stopButton.disabled = false;
+    }
 
 
     if (messageElement) {
-
         messageElement.textContent =
             "Waiting for current GPS location...";
     }
@@ -509,13 +1130,41 @@ function startGPS() {
             function(position) {
 
                 const latitude =
-                    position.coords.latitude;
+                    Number(position.coords.latitude);
 
                 const longitude =
-                    position.coords.longitude;
+                    Number(position.coords.longitude);
 
                 const accuracy =
-                    position.coords.accuracy;
+                    Number(position.coords.accuracy);
+
+
+                // -----------------------------------------
+                // VALIDATE GPS
+                // -----------------------------------------
+
+                if (
+                    !Number.isFinite(latitude) ||
+                    !Number.isFinite(longitude)
+                ) {
+
+                    console.error(
+                        "Invalid GPS coordinates received."
+                    );
+
+                    return;
+                }
+
+
+                // -----------------------------------------
+                // SAVE CURRENT AMBULANCE LOCATION
+                // -----------------------------------------
+
+                currentAmbulanceLocation = {
+                    latitude: latitude,
+                    longitude: longitude,
+                    accuracy: accuracy
+                };
 
 
                 // -----------------------------------------
@@ -525,7 +1174,6 @@ function startGPS() {
                 const gpsTime =
                     new Date();
 
-
                 lastGpsTimestamp =
                     gpsTime.getTime();
 
@@ -534,24 +1182,34 @@ function startGPS() {
                 // UPDATE UI
                 // -----------------------------------------
 
-                latitudeElement.textContent =
-                    latitude.toFixed(6);
+                if (latitudeElement) {
+                    latitudeElement.textContent =
+                        latitude.toFixed(6);
+                }
 
-                longitudeElement.textContent =
-                    longitude.toFixed(6);
+                if (longitudeElement) {
+                    longitudeElement.textContent =
+                        longitude.toFixed(6);
+                }
 
-                accuracyElement.textContent =
-                    Math.round(accuracy) + " m";
+                if (accuracyElement) {
+                    accuracyElement.textContent =
+                        Number.isFinite(accuracy)
+                            ? Math.round(accuracy) + " m"
+                            : "--";
+                }
 
-                lastUpdateElement.textContent =
-                    gpsTime.toLocaleTimeString();
+                if (lastUpdateElement) {
+                    lastUpdateElement.textContent =
+                        gpsTime.toLocaleTimeString();
+                }
 
-
-                gpsStatus.textContent =
-                    "LIVE";
-
-                gpsStatus.className =
-                    "status live";
+                if (gpsStatus) {
+                    gpsStatus.textContent =
+                        "LIVE";
+                    gpsStatus.className =
+                        "status live";
+                }
 
 
                 // -----------------------------------------
@@ -573,7 +1231,9 @@ function startGPS() {
                 updateAmbulanceMarker(
                     latitude,
                     longitude,
-                    accuracy
+                    Number.isFinite(accuracy)
+                        ? accuracy
+                        : 0
                 );
 
 
@@ -598,28 +1258,15 @@ function startGPS() {
                         "ambulance"
                     );
 
-
                 set(
                     ambulanceRef,
                     {
-
-                        latitude:
-                            latitude,
-
-                        longitude:
-                            longitude,
-
-                        accuracy:
-                            accuracy,
-
-                        timestamp:
-                            Date.now(),
-
-                        active:
-                            true,
-
-                        mode:
-                            "browser-live"
+                        latitude: latitude,
+                        longitude: longitude,
+                        accuracy: accuracy,
+                        timestamp: Date.now(),
+                        active: true,
+                        mode: "browser-live"
                     }
                 )
                 .then(
@@ -630,7 +1277,6 @@ function startGPS() {
                             latitude,
                             longitude
                         );
-
                     }
                 )
                 .catch(
@@ -656,19 +1302,37 @@ function startGPS() {
                     error
                 );
 
+                if (gpsStatus) {
 
-                gpsStatus.textContent =
-                    "GPS ERROR";
+                    gpsStatus.textContent =
+                        "GPS ERROR";
 
-                gpsStatus.className =
-                    "status stopped";
-
+                    gpsStatus.className =
+                        "status stopped";
+                }
 
                 if (messageElement) {
 
+                    let errorMessage =
+                        "Unable to get GPS location.";
+
+                    if (error.code === 1) {
+                        errorMessage =
+                            "Location permission denied. Allow location access.";
+                    }
+
+                    if (error.code === 2) {
+                        errorMessage =
+                            "GPS position unavailable. Move outdoors or near a window.";
+                    }
+
+                    if (error.code === 3) {
+                        errorMessage =
+                            "GPS request timed out. Waiting for another fix.";
+                    }
+
                     messageElement.textContent =
-                        "GPS error: " +
-                        error.message;
+                        errorMessage;
                 }
             },
 
@@ -678,14 +1342,9 @@ function startGPS() {
             // =========================================
 
             {
-                enableHighAccuracy:
-                    true,
-
-                maximumAge:
-                    0,
-
-                timeout:
-                    15000
+                enableHighAccuracy: true,
+                maximumAge: 0,
+                timeout: 15000
             }
         );
 }
@@ -716,53 +1375,72 @@ function stopGPS() {
     }
 
 
-    gpsSessionStarted =
-        false;
+    // -------------------------------------------------
+    // RESET GPS STATE
+    // -------------------------------------------------
 
-    lastGpsTimestamp =
-        null;
+    gpsSessionStarted = false;
+
+    lastGpsTimestamp = null;
+
+    currentAmbulanceLocation = null;
 
 
     // -------------------------------------------------
-    // REMOVE MAP MARKER
+    // REMOVE AMBULANCE MARKER
     // -------------------------------------------------
 
     removeAmbulanceMarker();
 
 
     // -------------------------------------------------
-    // RESET UI
+    // CLEAR ROUTE
     // -------------------------------------------------
 
-    gpsStatus.textContent =
-        "STOPPED";
-
-    gpsStatus.className =
-        "status stopped";
+    clearRoute();
 
 
-    latitudeElement.textContent =
-        "--";
+    // -------------------------------------------------
+    // RESET GPS UI
+    // -------------------------------------------------
 
-    longitudeElement.textContent =
-        "--";
+    if (gpsStatus) {
 
-    accuracyElement.textContent =
-        "--";
+        gpsStatus.textContent =
+            "STOPPED";
 
-    lastUpdateElement.textContent =
-        "--";
+        gpsStatus.className =
+            "status stopped";
+    }
+
+    if (latitudeElement) {
+        latitudeElement.textContent = "--";
+    }
+
+    if (longitudeElement) {
+        longitudeElement.textContent = "--";
+    }
+
+    if (accuracyElement) {
+        accuracyElement.textContent = "--";
+    }
+
+    if (lastUpdateElement) {
+        lastUpdateElement.textContent = "--";
+    }
 
 
     // -------------------------------------------------
     // BUTTON STATE
     // -------------------------------------------------
 
-    startButton.disabled =
-        false;
+    if (startButton) {
+        startButton.disabled = false;
+    }
 
-    stopButton.disabled =
-        true;
+    if (stopButton) {
+        stopButton.disabled = true;
+    }
 
 
     // -------------------------------------------------
@@ -775,19 +1453,12 @@ function stopGPS() {
             "ambulance"
         );
 
-
     set(
         ambulanceRef,
         {
-
-            active:
-                false,
-
-            timestamp:
-                Date.now(),
-
-            mode:
-                "browser-live"
+            active: false,
+            timestamp: Date.now(),
+            mode: "browser-live"
         }
     )
     .then(
@@ -810,11 +1481,9 @@ function stopGPS() {
 
 
     if (messageElement) {
-
         messageElement.textContent =
             "Live GPS stopped.";
     }
-
 
     console.log(
         "Live GPS stopped."
@@ -823,31 +1492,24 @@ function stopGPS() {
 
 
 // =====================================================
-// BUTTON EVENTS
-// =====================================================
-
-startButton.addEventListener(
-    "click",
-    startGPS
-);
-
-
-stopButton.addEventListener(
-    "click",
-    stopGPS
-);
-
-
-// =====================================================
-// INITIAL PAGE STATE
-// =====================================================
-// INITIALIZE HOSPITAL DROPDOWN
+// HOSPITAL DROPDOWN
 // =====================================================
 
 function initializeHospitalSelect() {
 
+    if (!hospitalSelect) {
+
+        console.error(
+            "Hospital select element not found."
+        );
+
+        return;
+    }
+
+
     hospitalSelect.innerHTML =
         '<option value="">Select Hospital</option>';
+
 
     hospitals.forEach(
         (hospital) => {
@@ -866,11 +1528,157 @@ function initializeHospitalSelect() {
             );
         }
     );
+
+
+    // -------------------------------------------------
+    // HOSPITAL SELECTION
+    // -------------------------------------------------
+
+    hospitalSelect.addEventListener(
+        "change",
+        () => {
+
+            const hospitalId =
+                hospitalSelect.value;
+
+
+            selectedHospital =
+                hospitals.find(
+                    (hospital) =>
+                        hospital.id === hospitalId
+                ) || null;
+
+
+            // -----------------------------------------
+            // NO HOSPITAL SELECTED
+            // -----------------------------------------
+
+            if (!selectedHospital) {
+
+                clearRoute();
+
+                if (hospitalMarker && map) {
+
+                    map.removeLayer(
+                        hospitalMarker
+                    );
+
+                    hospitalMarker = null;
+                }
+
+                if (destinationNameElement) {
+                    destinationNameElement.textContent =
+                        "--";
+                }
+
+                if (messageElement) {
+                    messageElement.textContent =
+                        "Please select a hospital.";
+                }
+
+                return;
+            }
+
+
+            // -----------------------------------------
+            // SELECTED HOSPITAL
+            // -----------------------------------------
+
+            console.log(
+                "SELECTED HOSPITAL:",
+                selectedHospital
+            );
+
+
+            // -----------------------------------------
+            // CLEAR PREVIOUS ROUTE
+            // -----------------------------------------
+
+            clearRoute();
+
+
+            // -----------------------------------------
+            // UPDATE DESTINATION
+            // -----------------------------------------
+
+            if (destinationNameElement) {
+
+                destinationNameElement.textContent =
+                    selectedHospital.name;
+            }
+
+
+            // -----------------------------------------
+            // SHOW HOSPITAL ON MAP
+            // -----------------------------------------
+
+            updateHospitalMarker(
+                selectedHospital
+            );
+
+
+            // -----------------------------------------
+            // MESSAGE
+            // -----------------------------------------
+
+            if (messageElement) {
+
+                if (currentAmbulanceLocation) {
+
+                    messageElement.textContent =
+                        `${selectedHospital.name} selected. Click Calculate Route.`;
+
+                } else {
+
+                    messageElement.textContent =
+                        `${selectedHospital.name} selected. Start GPS first.`;
+                }
+            }
+        }
+    );
 }
+
+
 // =====================================================
+// BUTTON EVENTS
+// =====================================================
+
+if (startButton) {
+
+    startButton.addEventListener(
+        "click",
+        startGPS
+    );
+}
+
+
+if (stopButton) {
+
+    stopButton.addEventListener(
+        "click",
+        stopGPS
+    );
+}
+
+
+if (routeButton) {
+
+    routeButton.addEventListener(
+        "click",
+        calculateRoute
+    );
+}
+
+
+// =====================================================
+// INITIAL PAGE STATE
+// =====================================================
+
 initializeHospitalSelect();
 
 resetGPSDisplay();
+
+resetRouteDisplay();
 
 
 // =====================================================
@@ -891,3 +1699,4 @@ console.log(
 console.log(
     "Waiting for user to start live GPS..."
 );
+
