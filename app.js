@@ -144,6 +144,8 @@ let routeLine = null;
 let routeData = null;
 
 let hospitalMarker = null;
+let junctionMarkers = new Map();
+let routeJunctions = [];
 
 
 // =====================================================
@@ -171,6 +173,42 @@ const hospitals = [
         longitude: 76.9352481
     }
 ];
+
+
+// =====================================================
+// FIXED TRAFFIC JUNCTIONS
+// These coordinates never change.
+// =====================================================
+
+const junctions = [
+    {
+        id: "J1",
+        name: "Junction 1",
+        latitude: 11.018563,
+        longitude: 76.934374
+    },
+    {
+        id: "J2",
+        name: "Junction 2",
+        latitude: 11.019186,
+        longitude: 76.934437
+    },
+    {
+        id: "J3",
+        name: "Junction 3",
+        latitude: 11.017374,
+        longitude: 76.934561
+    },
+    {
+        id: "J4",
+        name: "Junction 4",
+        latitude: 11.017930,
+        longitude: 76.935116
+    }
+];
+
+const JUNCTION_ROUTE_RADIUS = 50;
+const JUNCTION_PASSED_ROUTE_BUFFER = 30;
 
 
 // =====================================================
@@ -314,6 +352,8 @@ function initializeMap() {
                 "&copy; OpenStreetMap contributors"
         }
     ).addTo(map);
+
+    initializeJunctionMarkers();
 
     console.log("Map initialized successfully");
 
@@ -466,6 +506,344 @@ function updateHospitalMarker(hospital) {
 
 
 // =====================================================
+// FIXED JUNCTION MARKERS
+// =====================================================
+
+function initializeJunctionMarkers() {
+
+    if (!map) {
+        return;
+    }
+
+    junctions.forEach(
+        (junction) => {
+
+            const marker =
+                L.circleMarker(
+                    [junction.latitude, junction.longitude],
+                    {
+                        radius: 8,
+                        color: "#5f6368",
+                        fillColor: "#5f6368",
+                        fillOpacity: 0.9,
+                        weight: 2
+                    }
+                )
+                .addTo(map)
+                .bindTooltip(
+                    junction.id,
+                    {
+                        permanent: true,
+                        direction: "top",
+                        offset: [0, -8]
+                    }
+                )
+                .bindPopup(
+                    `<b>${junction.id}</b><br>${junction.name}`
+                );
+
+            junctionMarkers.set(junction.id, marker);
+        }
+    );
+}
+
+
+function updateJunctionMarkerStyles(nextJunctionId = null) {
+
+    junctions.forEach(
+        (junction) => {
+
+            const marker = junctionMarkers.get(junction.id);
+
+            if (!marker) {
+                return;
+            }
+
+            const routeJunction =
+                routeJunctions.find(
+                    (item) => item.id === junction.id
+                );
+
+            if (junction.id === nextJunctionId) {
+
+                marker.setStyle(
+                    {
+                        color: "#e65100",
+                        fillColor: "#fb8c00"
+                    }
+                );
+
+                marker.setRadius(10);
+
+            } else if (routeJunction) {
+
+                marker.setStyle(
+                    {
+                        color: "#0d47a1",
+                        fillColor: "#1e88e5"
+                    }
+                );
+
+                marker.setRadius(8);
+
+            } else {
+
+                marker.setStyle(
+                    {
+                        color: "#5f6368",
+                        fillColor: "#5f6368"
+                    }
+                );
+
+                marker.setRadius(8);
+            }
+        }
+    );
+}
+
+
+// =====================================================
+// ROUTE / JUNCTION GEOMETRY
+// =====================================================
+
+function calculateHaversineDistance(
+    latitudeA,
+    longitudeA,
+    latitudeB,
+    longitudeB
+) {
+
+    const earthRadius = 6371000;
+    const toRadians = (degrees) => degrees * Math.PI / 180;
+
+    const latitudeDifference =
+        toRadians(latitudeB - latitudeA);
+
+    const longitudeDifference =
+        toRadians(longitudeB - longitudeA);
+
+    const a =
+        Math.sin(latitudeDifference / 2) ** 2 +
+        Math.cos(toRadians(latitudeA)) *
+        Math.cos(toRadians(latitudeB)) *
+        Math.sin(longitudeDifference / 2) ** 2;
+
+    return 2 * earthRadius * Math.atan2(
+        Math.sqrt(a),
+        Math.sqrt(1 - a)
+    );
+}
+
+
+function projectPointOntoRoute(
+    latitude,
+    longitude,
+    routeCoordinates
+) {
+
+    if (!Array.isArray(routeCoordinates) || routeCoordinates.length < 2) {
+        return null;
+    }
+
+    const metersPerDegreeLatitude = 111320;
+    const metersPerDegreeLongitude =
+        111320 * Math.cos(latitude * Math.PI / 180);
+
+    let closestDistance = Number.POSITIVE_INFINITY;
+    let routePosition = 0;
+    let distanceBeforeSegment = 0;
+
+    for (let index = 0; index < routeCoordinates.length - 1; index += 1) {
+
+        const start = routeCoordinates[index];
+        const end = routeCoordinates[index + 1];
+
+        const startX =
+            (start[0] - longitude) * metersPerDegreeLongitude;
+        const startY =
+            (start[1] - latitude) * metersPerDegreeLatitude;
+        const endX =
+            (end[0] - longitude) * metersPerDegreeLongitude;
+        const endY =
+            (end[1] - latitude) * metersPerDegreeLatitude;
+
+        const segmentX = endX - startX;
+        const segmentY = endY - startY;
+        const segmentLengthSquared =
+            segmentX ** 2 + segmentY ** 2;
+
+        const segmentLength = calculateHaversineDistance(
+            start[1],
+            start[0],
+            end[1],
+            end[0]
+        );
+
+        if (segmentLengthSquared === 0) {
+            distanceBeforeSegment += segmentLength;
+            continue;
+        }
+
+        const projectionRatio = Math.max(
+            0,
+            Math.min(
+                1,
+                -((startX * segmentX) + (startY * segmentY)) /
+                    segmentLengthSquared
+            )
+        );
+
+        const nearestX = startX + projectionRatio * segmentX;
+        const nearestY = startY + projectionRatio * segmentY;
+        const distanceToSegment = Math.sqrt(
+            nearestX ** 2 + nearestY ** 2
+        );
+
+        if (distanceToSegment < closestDistance) {
+            closestDistance = distanceToSegment;
+            routePosition =
+                distanceBeforeSegment + projectionRatio * segmentLength;
+        }
+
+        distanceBeforeSegment += segmentLength;
+    }
+
+    return {
+        distanceToRoute: closestDistance,
+        routePosition: routePosition
+    };
+}
+
+
+// =====================================================
+// ROUTE-AWARE JUNCTION ANALYSIS
+// =====================================================
+
+function analyzeRouteJunctions(routeCoordinates) {
+
+    routeJunctions = junctions
+        .map(
+            (junction) => {
+
+                const projection = projectPointOntoRoute(
+                    junction.latitude,
+                    junction.longitude,
+                    routeCoordinates
+                );
+
+                if (
+                    !projection ||
+                    projection.distanceToRoute > JUNCTION_ROUTE_RADIUS
+                ) {
+                    return null;
+                }
+
+                return {
+                    ...junction,
+                    distanceToRoute: projection.distanceToRoute,
+                    routePosition: projection.routePosition
+                };
+            }
+        )
+        .filter(Boolean)
+        .sort(
+            (junctionA, junctionB) =>
+                junctionA.routePosition - junctionB.routePosition
+        );
+
+    updateNextJunction();
+}
+
+
+function updateNextJunction() {
+
+    if (!routeData || !currentAmbulanceLocation) {
+        return;
+    }
+
+    const routeCoordinates = routeData.geometry.coordinates;
+
+    const ambulanceProjection = projectPointOntoRoute(
+        currentAmbulanceLocation.latitude,
+        currentAmbulanceLocation.longitude,
+        routeCoordinates
+    );
+
+    if (!ambulanceProjection) {
+        return;
+    }
+
+    const nextJunction = routeJunctions.find(
+        (junction) =>
+            junction.routePosition >=
+            ambulanceProjection.routePosition - JUNCTION_PASSED_ROUTE_BUFFER
+    ) || null;
+
+    updateJunctionMarkerStyles(
+        nextJunction ? nextJunction.id : null
+    );
+
+    if (junctionSequenceElement) {
+
+        junctionSequenceElement.textContent =
+            routeJunctions.length > 0
+                ? routeJunctions.map((junction) => junction.id).join(" → ")
+                : "No fixed junctions on this route";
+    }
+
+    if (!nextJunction) {
+
+        if (nextJunctionElement) {
+            nextJunctionElement.textContent = "No junction ahead";
+        }
+
+        if (junctionDistanceElement) {
+            junctionDistanceElement.textContent = "--";
+        }
+
+        return;
+    }
+
+    const distanceToNextJunction = calculateHaversineDistance(
+        currentAmbulanceLocation.latitude,
+        currentAmbulanceLocation.longitude,
+        nextJunction.latitude,
+        nextJunction.longitude
+    );
+
+    if (nextJunctionElement) {
+        nextJunctionElement.textContent =
+            `${nextJunction.id} — ${nextJunction.name}`;
+    }
+
+    if (junctionDistanceElement) {
+        junctionDistanceElement.textContent =
+            formatRouteDistance(distanceToNextJunction);
+    }
+}
+
+
+function resetJunctionAnalysis() {
+
+    routeJunctions = [];
+
+    if (nextJunctionElement) {
+        nextJunctionElement.textContent = "--";
+    }
+
+    if (junctionDistanceElement) {
+        junctionDistanceElement.textContent = "--";
+    }
+
+    if (junctionSequenceElement) {
+        junctionSequenceElement.textContent = "--";
+    }
+
+    updateJunctionMarkerStyles();
+}
+
+
+// =====================================================
 // REMOVE ROUTE
 // =====================================================
 
@@ -478,6 +856,8 @@ function clearRoute() {
     }
 
     routeData = null;
+
+    resetJunctionAnalysis();
 
     if (routeStatusElement) {
         routeStatusElement.textContent = "NO ROUTE";
@@ -890,25 +1270,12 @@ async function calculateRoute() {
 
 
         // -------------------------------------------------
-        // JUNCTION SECTION
-        //
-        // Junction logic will be added later.
+        // ANALYZE FIXED JUNCTIONS ON THE ACTUAL ROAD ROUTE
         // -------------------------------------------------
 
-        if (nextJunctionElement) {
-            nextJunctionElement.textContent =
-                "Not calculated";
-        }
-
-        if (junctionDistanceElement) {
-            junctionDistanceElement.textContent =
-                "--";
-        }
-
-        if (junctionSequenceElement) {
-            junctionSequenceElement.textContent =
-                "Junction analysis pending";
-        }
+        analyzeRouteJunctions(
+            route.geometry.coordinates
+        );
 
 
         // -------------------------------------------------
@@ -1241,6 +1608,15 @@ function startGPS() {
                         ? accuracy
                         : 0
                 );
+
+                // -----------------------------------------
+                // UPDATE THE NEXT JUNCTION FOR THIS ROUTE
+                // No signal priority is activated at this stage.
+                // -----------------------------------------
+
+                if (routeData && routeJunctions.length > 0) {
+                    updateNextJunction();
+                }
 
 
                 // -----------------------------------------
