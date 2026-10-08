@@ -8,14 +8,18 @@
     <meta name="viewport"
           content="width=device-width, initial-scale=1.0">
 
+    <meta name="description"
+          content="Smart Traffic Ambulance - Intelligent Ambulance Traffic Priority System">
+
     <title>Smart Traffic Ambulance</title>
 
+    <!-- Main CSS -->
     <link rel="stylesheet"
           href="style.css">
 
-    <!-- Leaflet -->
+    <!-- Leaflet CSS -->
     <link rel="stylesheet"
-          href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 </head>
 
@@ -24,31 +28,45 @@
 
 <div class="container">
 
-    <!-- HEADER -->
+    <!-- ==================================================
+         HEADER
+    ================================================== -->
 
-    <header>
+    <header class="main-header">
 
-        <h1>🚑 Smart Traffic Ambulance</h1>
+        <div class="header-icon">
+            🚑
+        </div>
 
-        <p>
-            Intelligent Ambulance Traffic Priority System
-        </p>
+        <div>
+            <h1>
+                Smart Traffic Ambulance
+            </h1>
+
+            <p>
+                Intelligent Ambulance Traffic Priority System
+            </p>
+        </div>
 
     </header>
 
 
-    <!-- STATUS -->
+    <!-- ==================================================
+         SYSTEM STATUS
+    ================================================== -->
 
     <section class="status-section">
 
         <div class="status-card">
 
-            <h3>GPS Status</h3>
+            <div class="status-title">
+                📍 GPS Status
+            </div>
 
             <span id="gpsStatus"
                   class="status stopped">
 
-                STOPPED
+                WAITING FOR GPS
 
             </span>
 
@@ -57,12 +75,14 @@
 
         <div class="status-card">
 
-            <h3>Firebase</h3>
+            <div class="status-title">
+                🔥 Firebase
+            </div>
 
             <span id="firebaseStatus"
                   class="status connecting">
 
-                CONNECTING
+                CONNECTING...
 
             </span>
 
@@ -71,57 +91,86 @@
     </section>
 
 
-    <!-- GPS DATA -->
+    <!-- ==================================================
+         LIVE GPS DATA
+    ================================================== -->
 
     <section class="data-section">
 
         <div class="data-card">
 
-            <h3>Latitude</h3>
+            <span class="data-label">
+                Latitude
+            </span>
 
-            <p id="latitude">--</p>
-
-        </div>
-
-
-        <div class="data-card">
-
-            <h3>Longitude</h3>
-
-            <p id="longitude">--</p>
+            <strong id="latitude">
+                --
+            </strong>
 
         </div>
 
 
         <div class="data-card">
 
-            <h3>Accuracy</h3>
+            <span class="data-label">
+                Longitude
+            </span>
 
-            <p id="accuracy">--</p>
+            <strong id="longitude">
+                --
+            </strong>
 
         </div>
 
 
         <div class="data-card">
 
-            <h3>Last Update</h3>
+            <span class="data-label">
+                GPS Accuracy
+            </span>
 
-            <p id="lastUpdate">--</p>
+            <strong id="accuracy">
+                --
+            </strong>
+
+        </div>
+
+
+        <div class="data-card">
+
+            <span class="data-label">
+                Last Update
+            </span>
+
+            <strong id="lastUpdate">
+                --
+            </strong>
 
         </div>
 
     </section>
 
 
-    <!-- DESTINATION -->
+    <!-- ==================================================
+         DESTINATION
+    ================================================== -->
 
     <section class="destination-section">
 
-        <h2>🏥 Select Destination</h2>
+        <div class="section-heading">
 
-        <p class="section-description">
-            Select the hospital to calculate the ambulance route.
-        </p>
+            <div>
+                <h2>
+                    🏥 Select Destination
+                </h2>
+
+                <p>
+                    Select a fixed hospital to calculate
+                    the ambulance road route.
+                </p>
+            </div>
+
+        </div>
 
 
         <div class="destination-controls">
@@ -138,7 +187,7 @@
             <button id="routeButton"
                     class="route-button">
 
-                🗺️ CALCULATE ROUTE
+                🗺️ Calculate Route
 
             </button>
 
@@ -147,118 +196,188 @@
     </section>
 
 
-    <!-- MAP -->
+    <!-- ==================================================
+         MAP
+    ================================================== -->
 
     <section class="map-section">
 
-        <h2>🗺️ Live Route Map</h2>
+        <div class="section-heading">
+
+            <div>
+                <h2>
+                    🗺️ Live Route Map
+                </h2>
+
+                <p>
+                    Live ambulance position, fixed junctions,
+                    hospital and actual road route.
+                </p>
+            </div>
+
+        </div>
+
 
         <div id="map"></div>
 
     </section>
 
 
-    <!-- LEGEND -->
+    <!-- ==================================================
+         MAP LEGEND
+    ================================================== -->
 
-    <div class="legend">
+    <section class="legend">
 
-        <div>
-            <span class="legend-junction"></span>
-            Traffic Junction
+        <div class="legend-item">
+
+            <span class="legend-marker legend-junction">
+            </span>
+
+            <span>
+                Fixed Traffic Junction
+            </span>
+
         </div>
 
 
-        <div>
-            <span class="legend-ambulance"></span>
-            Ambulance
+        <div class="legend-item">
+
+            <span class="legend-marker legend-ambulance">
+            </span>
+
+            <span>
+                Live Ambulance
+            </span>
+
         </div>
 
 
-        <div>
-            <span class="legend-hospital"></span>
-            Hospital
+        <div class="legend-item">
+
+            <span class="legend-marker legend-hospital">
+            </span>
+
+            <span>
+                Fixed Hospital
+            </span>
+
         </div>
 
 
-        <div>
-            <span class="legend-route"></span>
-            Ambulance Route
+        <div class="legend-item">
+
+            <span class="legend-route">
+            </span>
+
+            <span>
+                Ambulance Route
+            </span>
+
         </div>
 
-    </div>
+    </section>
 
 
-    <!-- ROUTE DETAILS -->
+    <!-- ==================================================
+         ROUTE INFORMATION
+    ================================================== -->
 
     <section class="route-section">
 
-        <h2>🚦 Route Information</h2>
+        <h2>
+            🚦 Route Information
+        </h2>
 
 
         <div class="route-grid">
 
+            <!-- Destination -->
+
             <div class="route-card">
 
-                <h3>Destination</h3>
+                <span class="route-card-label">
+                    Destination
+                </span>
 
-                <p id="destinationName">
+                <strong id="destinationName">
                     Not selected
-                </p>
+                </strong>
 
             </div>
 
 
+            <!-- Route Distance -->
+
             <div class="route-card">
 
-                <h3>Route Distance</h3>
+                <span class="route-card-label">
+                    Route Distance
+                </span>
 
-                <p id="routeDistance">
+                <strong id="routeDistance">
                     --
-                </p>
+                </strong>
 
             </div>
 
 
+            <!-- Estimated Time -->
+
             <div class="route-card">
 
-                <h3>Estimated Time</h3>
+                <span class="route-card-label">
+                    Estimated Time
+                </span>
 
-                <p id="routeTime">
+                <strong id="routeTime">
                     --
-                </p>
+                </strong>
 
             </div>
 
 
+            <!-- Next Junction -->
+
             <div class="route-card">
 
-                <h3>Next Junction</h3>
+                <span class="route-card-label">
+                    Next Junction
+                </span>
 
-                <p id="nextJunction">
+                <strong id="nextJunction">
                     Waiting for GPS
-                </p>
+                </strong>
 
             </div>
 
 
+            <!-- Junction Distance -->
+
             <div class="route-card">
 
-                <h3>Distance to Junction</h3>
+                <span class="route-card-label">
+                    Distance to Junction
+                </span>
 
-                <p id="junctionDistance">
+                <strong id="junctionDistance">
                     --
-                </p>
+                </strong>
 
             </div>
 
 
-            <div class="route-card">
+            <!-- Traffic Priority -->
 
-                <h3>Traffic Priority</h3>
+            <div class="route-card priority-card">
 
-                <p id="routeStatus">
+                <span class="route-card-label">
+                    Traffic Priority
+                </span>
+
+                <strong id="routeStatus">
                     Normal
-                </p>
+                </strong>
 
             </div>
 
@@ -267,11 +386,27 @@
     </section>
 
 
-    <!-- JUNCTION SEQUENCE -->
+    <!-- ==================================================
+         JUNCTION SEQUENCE
+    ================================================== -->
 
     <section class="sequence-section">
 
-        <h2>🚦 Junctions on Route</h2>
+        <div class="section-heading">
+
+            <div>
+                <h2>
+                    🚦 Junctions on Route
+                </h2>
+
+                <p>
+                    Fixed junctions detected along the
+                    ambulance's actual road route.
+                </p>
+            </div>
+
+        </div>
+
 
         <div id="junctionSequence"
              class="junction-sequence">
@@ -283,14 +418,16 @@
     </section>
 
 
-    <!-- BUTTONS -->
+    <!-- ==================================================
+         GPS CONTROL BUTTONS
+    ================================================== -->
 
-    <div class="button-section">
+    <section class="button-section">
 
         <button id="startButton"
                 class="start-button">
 
-            ▶ START GPS
+            ▶ Start Live GPS
 
         </button>
 
@@ -299,42 +436,57 @@
                 class="stop-button"
                 disabled>
 
-            ■ STOP GPS
+            ■ Stop GPS
 
         </button>
 
-    </div>
+    </section>
 
 
-    <!-- MESSAGE -->
+    <!-- ==================================================
+         SYSTEM MESSAGE
+    ================================================== -->
 
     <div id="message"
          class="message">
 
-        Select a hospital and start GPS.
+        Select a hospital and start live GPS.
 
     </div>
 
 
+    <!-- ==================================================
+         FOOTER
+    ================================================== -->
+
     <footer>
 
-        Smart Traffic Ambulance |
-        ESP32 + GPS + Firebase
+        <strong>
+            Smart Traffic Ambulance
+        </strong>
+
+        <span>
+            ESP32 • GPS • Firebase • OSRM • Leaflet
+        </span>
 
     </footer>
 
 </div>
 
 
-<!-- Leaflet -->
+<!-- ========================   ==============================
+     LEAFLET JAVASCRIPT
+====================================================== -->
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-
-<!-- Application -->
+<!-- ======================================================
+     APPLICATION JAVASCRIPT
+====================================================== -->
 
 <script type="module"
-        src="app.js"></script>
+        src="app.js">
+</script>
 
 </body>
 
