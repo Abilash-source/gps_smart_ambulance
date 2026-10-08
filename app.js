@@ -83,6 +83,9 @@ const longitudeElement =
 const accuracyElement =
     document.getElementById("accuracy");
 
+const gpsReliabilityElement =
+    document.getElementById("gpsReliability");
+
 const lastUpdateElement =
     document.getElementById("lastUpdate");
 
@@ -146,6 +149,11 @@ let routeData = null;
 let hospitalMarker = null;
 let junctionMarkers = new Map();
 let routeJunctions = [];
+let activePriorityJunctionId = null;
+let acceptedGpsFixes = [];
+let lastRouteOrigin = null;
+let lastRouteCalculatedAt = 0;
+let routeRequestInProgress = false;
 
 
 // =====================================================
@@ -209,6 +217,14 @@ const junctions = [
 
 const JUNCTION_ROUTE_RADIUS = 50;
 const JUNCTION_PASSED_ROUTE_BUFFER = 30;
+const PRIORITY_DISTANCE = 100;
+const MAX_RAW_GPS_ACCURACY = 40;
+const REQUIRED_STABILIZED_ACCURACY = 25;
+const GPS_FIX_WINDOW_SIZE = 5;
+const ROAD_SNAP_MAX_DISTANCE = 30;
+const ROUTE_RECALCULATE_DISTANCE = 25;
+const ROUTE_RECALCULATE_INTERVAL = 10000;
+const GPS_STALE_AFTER = 15000;
 
 
 // =====================================================
@@ -793,6 +809,12 @@ function updateNextJunction() {
 
     if (!nextJunction) {
 
+        updateJunctionPriority(
+            null,
+            Number.POSITIVE_INFINITY,
+            ambulanceProjection.routePosition
+        );
+
         if (nextJunctionElement) {
             nextJunctionElement.textContent = "No junction ahead";
         }
@@ -820,12 +842,91 @@ function updateNextJunction() {
         junctionDistanceElement.textContent =
             formatRouteDistance(distanceToNextJunction);
     }
+
+    updateJunctionPriority(
+        nextJunction,
+        distanceToNextJunction,
+        ambulanceProjection.routePosition
+    );
+}
+
+
+function updateJunctionPriority(
+    nextJunction,
+    distanceToNextJunction,
+    ambulanceRoutePosition
+) {
+
+    const activeJunction = routeJunctions.find(
+        (junction) => junction.id === activePriorityJunctionId
+    );
+
+    if (
+        activeJunction &&
+        ambulanceRoutePosition >
+            activeJunction.routePosition + JUNCTION_PASSED_ROUTE_BUFFER
+    ) {
+        activePriorityJunctionId = null;
+    }
+
+    if (
+        !activePriorityJunctionId &&
+        nextJunction &&
+        distanceToNextJunction <= PRIORITY_DISTANCE
+    ) {
+        activePriorityJunctionId = nextJunction.id;
+    }
+
+    const priorityText = activePriorityJunctionId
+        ? `PRIORITY ACTIVE — ${activePriorityJunctionId}`
+        : nextJunction
+            ? `NEXT — ${nextJunction.id}`
+            : "NORMAL";
+
+    if (routeStatusElement) {
+        routeStatusElement.textContent = priorityText;
+    }
+
+    const junctionStates = {};
+
+    junctions.forEach(
+        (junction) => {
+
+            const onRoute = routeJunctions.some(
+                (item) => item.id === junction.id
+            );
+
+            junctionStates[junction.id] = {
+                status: junction.id === activePriorityJunctionId
+                    ? "PRIORITY_ACTIVE"
+                    : junction.id === nextJunction?.id
+                        ? "NEXT"
+                        : onRoute
+                            ? "WAITING"
+                            : "NOT_ON_ROUTE",
+                timestamp: Date.now()
+            };
+        }
+    );
+
+    set(
+        ref(database, "junctionPriority"),
+        {
+            activeJunctionId: activePriorityJunctionId,
+            nextJunctionId: nextJunction?.id || null,
+            states: junctionStates,
+            timestamp: Date.now()
+        }
+    ).catch(
+        (error) => console.warn("Junction state upload failed:", error)
+    );
 }
 
 
 function resetJunctionAnalysis() {
 
     routeJunctions = [];
+    activePriorityJunctionId = null;
 
     if (nextJunctionElement) {
         nextJunctionElement.textContent = "--";
@@ -840,6 +941,18 @@ function resetJunctionAnalysis() {
     }
 
     updateJunctionMarkerStyles();
+
+    set(
+        ref(database, "junctionPriority"),
+        {
+            activeJunctionId: null,
+            nextJunctionId: null,
+            status: "NORMAL",
+            timestamp: Date.now()
+        }
+    ).catch(
+        (error) => console.warn("Junction reset upload failed:", error)
+    );
 }
 
 
@@ -856,6 +969,8 @@ function clearRoute() {
     }
 
     routeData = null;
+    lastRouteOrigin = null;
+    lastRouteCalculatedAt = 0;
 
     resetJunctionAnalysis();
 
@@ -933,10 +1048,156 @@ function formatRouteDistance(meters) {
 
 
 // =====================================================
+// GPS RELIABILITY AND ROAD-SNAP VALIDATION
+// =====================================================
+
+function setGpsReliability(text, color = "#555") {
+
+    if (gpsReliabilityElement) {
+        gpsReliabilityElement.textContent = text;
+        gpsReliabilityElement.style.color = color;
+    }
+}
+
+
+function getStabilizedLocation() {
+
+    if (acceptedGpsFixes.length < 3) {
+        return null;
+    }
+
+    const totalWeight = acceptedGpsFixes.reduce(
+        (sum, fix) => sum + 1 / Math.max(fix.accuracy, 1) ** 2,
+        0
+    );
+
+    const latitude = acceptedGpsFixes.reduce(
+        (sum, fix) =>
+            sum + fix.latitude / Math.max(fix.accuracy, 1) ** 2,
+        0
+    ) / totalWeight;
+
+    const longitude = acceptedGpsFixes.reduce(
+        (sum, fix) =>
+            sum + fix.longitude / Math.max(fix.accuracy, 1) ** 2,
+        0
+    ) / totalWeight;
+
+    const averageReportedAccuracy = Math.sqrt(
+        acceptedGpsFixes.reduce(
+            (sum, fix) => sum + fix.accuracy ** 2,
+            0
+        ) / acceptedGpsFixes.length
+    );
+
+    const positionSpread = Math.sqrt(
+        acceptedGpsFixes.reduce(
+            (sum, fix) =>
+                sum + calculateHaversineDistance(
+                    latitude,
+                    longitude,
+                    fix.latitude,
+                    fix.longitude
+                ) ** 2,
+            0
+        ) / acceptedGpsFixes.length
+    );
+
+    return {
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: Math.sqrt(
+            averageReportedAccuracy ** 2 + positionSpread ** 2
+        ),
+        rawAccuracy: acceptedGpsFixes.at(-1).accuracy,
+        timestamp: Date.now(),
+        reliable: true
+    };
+}
+
+
+async function snapLocationToRoad(location) {
+
+    const nearestUrl =
+        `https://router.project-osrm.org/nearest/v1/driving/` +
+        `${location.longitude},${location.latitude}?number=1`;
+
+    const response = await fetch(nearestUrl);
+
+    if (!response.ok) {
+        throw new Error(`Road-snap HTTP error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const waypoint = data.waypoints && data.waypoints[0];
+
+    if (!waypoint || !Array.isArray(waypoint.location)) {
+        throw new Error("No nearby road was found for the GPS location.");
+    }
+
+    const snappedLocation = {
+        latitude: waypoint.location[1],
+        longitude: waypoint.location[0]
+    };
+
+    const snapDistance = calculateHaversineDistance(
+        location.latitude,
+        location.longitude,
+        snappedLocation.latitude,
+        snappedLocation.longitude
+    );
+
+    if (snapDistance > ROAD_SNAP_MAX_DISTANCE) {
+        throw new Error(
+            `Nearest road is ${Math.round(snapDistance)} m away; route rejected.`
+        );
+    }
+
+    return {
+        ...snappedLocation,
+        accuracy: location.accuracy,
+        rawAccuracy: location.rawAccuracy,
+        timestamp: location.timestamp,
+        reliable: true,
+        snapDistance: snapDistance
+    };
+}
+
+
+function shouldRecalculateRoute() {
+
+    if (
+        !routeData ||
+        !lastRouteOrigin ||
+        !currentAmbulanceLocation ||
+        routeRequestInProgress ||
+        Date.now() - lastRouteCalculatedAt < ROUTE_RECALCULATE_INTERVAL
+    ) {
+        return false;
+    }
+
+    return calculateHaversineDistance(
+        lastRouteOrigin.latitude,
+        lastRouteOrigin.longitude,
+        currentAmbulanceLocation.latitude,
+        currentAmbulanceLocation.longitude
+    ) >= ROUTE_RECALCULATE_DISTANCE;
+}
+
+
+function requestControlledRouteRecalculation() {
+
+    if (shouldRecalculateRoute()) {
+        calculateRoute({ automatic: true });
+    }
+}
+
+
+// =====================================================
 // CALCULATE ACTUAL ROAD ROUTE USING OSRM
 // =====================================================
 
-async function calculateRoute() {
+async function calculateRoute(options = {}) {
 
     // -------------------------------------------------
     // CHECK MAP
@@ -961,7 +1222,7 @@ async function calculateRoute() {
     // CHECK LIVE GPS
     // -------------------------------------------------
 
-    if (!currentAmbulanceLocation) {
+    if (!currentAmbulanceLocation || !currentAmbulanceLocation.reliable) {
 
         console.warn(
             "Route requested before a GPS location was received."
@@ -969,7 +1230,7 @@ async function calculateRoute() {
 
         if (messageElement) {
             messageElement.textContent =
-                "Start GPS and wait for the current ambulance location first.";
+                "Wait for a reliable GPS location before calculating a route.";
         }
 
         return;
@@ -999,13 +1260,6 @@ async function calculateRoute() {
     // CURRENT AMBULANCE LOCATION
     // -------------------------------------------------
 
-    const ambulanceLatitude =
-        Number(currentAmbulanceLocation.latitude);
-
-    const ambulanceLongitude =
-        Number(currentAmbulanceLocation.longitude);
-
-
     // -------------------------------------------------
     // FIXED HOSPITAL LOCATION
     // -------------------------------------------------
@@ -1022,8 +1276,6 @@ async function calculateRoute() {
     // -------------------------------------------------
 
     if (
-        !Number.isFinite(ambulanceLatitude) ||
-        !Number.isFinite(ambulanceLongitude) ||
         !Number.isFinite(hospitalLatitude) ||
         !Number.isFinite(hospitalLongitude)
     ) {
@@ -1034,7 +1286,7 @@ async function calculateRoute() {
 
         if (messageElement) {
             messageElement.textContent =
-                "Invalid GPS or hospital coordinates.";
+                "Invalid hospital coordinates.";
         }
 
         return;
@@ -1049,9 +1301,13 @@ async function calculateRoute() {
         routeButton.disabled = true;
     }
 
+    routeRequestInProgress = true;
+
     if (messageElement) {
         messageElement.textContent =
-            "Calculating actual road route...";
+            options.automatic
+                ? "Updating route from the latest reliable location..."
+                : "Validating location and calculating road route...";
     }
 
     if (routeStatusElement) {
@@ -1069,19 +1325,22 @@ async function calculateRoute() {
     // NOT latitude,longitude
     // -------------------------------------------------
 
-    const osrmUrl =
-        `${OSRM_BASE_URL}/` +
-        `${ambulanceLongitude},${ambulanceLatitude};` +
-        `${hospitalLongitude},${hospitalLatitude}` +
-        `?overview=full&geometries=geojson&steps=true`;
-
-    console.log(
-        "OSRM ROUTE REQUEST:",
-        osrmUrl
-    );
-
-
     try {
+
+        const routingOrigin = await snapLocationToRoad(
+            currentAmbulanceLocation
+        );
+
+        const ambulanceLatitude = routingOrigin.latitude;
+        const ambulanceLongitude = routingOrigin.longitude;
+
+        const osrmUrl =
+            `${OSRM_BASE_URL}/` +
+            `${ambulanceLongitude},${ambulanceLatitude};` +
+            `${hospitalLongitude},${hospitalLatitude}` +
+            `?overview=full&geometries=geojson&steps=true`;
+
+        console.log("OSRM ROUTE REQUEST:", osrmUrl);
 
         // -------------------------------------------------
         // REQUEST OSRM
@@ -1162,8 +1421,12 @@ async function calculateRoute() {
             duration: route.duration,
             geometry: route.geometry,
             legs: route.legs || [],
-            waypoints: data.waypoints || []
+            waypoints: data.waypoints || [],
+            routingOrigin: routingOrigin
         };
+
+        lastRouteOrigin = routingOrigin;
+        lastRouteCalculatedAt = Date.now();
 
 
         // -------------------------------------------------
@@ -1209,7 +1472,7 @@ async function calculateRoute() {
         const routeBounds =
             routeLine.getBounds();
 
-        if (routeBounds.isValid()) {
+        if (routeBounds.isValid() && !options.automatic) {
 
             map.fitBounds(
                 routeBounds,
@@ -1371,6 +1634,8 @@ async function calculateRoute() {
         if (routeButton) {
             routeButton.disabled = false;
         }
+
+        routeRequestInProgress = false;
     }
 }
 
@@ -1430,6 +1695,8 @@ function startGPS() {
     lastGpsTimestamp = null;
 
     currentAmbulanceLocation = null;
+    acceptedGpsFixes = [];
+    setGpsReliability("ACQUIRING FIXES", "#b26a00");
 
 
     // -------------------------------------------------
@@ -1502,13 +1769,13 @@ function startGPS() {
 
             function(position) {
 
-                const latitude =
+                let latitude =
                     Number(position.coords.latitude);
 
-                const longitude =
+                let longitude =
                     Number(position.coords.longitude);
 
-                const accuracy =
+                let accuracy =
                     Number(position.coords.accuracy);
 
 
@@ -1528,6 +1795,82 @@ function startGPS() {
                     return;
                 }
 
+                if (
+                    !Number.isFinite(accuracy) ||
+                    accuracy > MAX_RAW_GPS_ACCURACY
+                ) {
+
+                    if (accuracyElement) {
+                        accuracyElement.textContent =
+                            Number.isFinite(accuracy)
+                                ? Math.round(accuracy) + " m"
+                                : "--";
+                    }
+
+                    if (gpsStatus) {
+                        gpsStatus.textContent = "WAITING FOR BETTER GPS";
+                        gpsStatus.className = "status stopped";
+                    }
+
+                    setGpsReliability(
+                        Number.isFinite(accuracy)
+                            ? `REJECTED (${Math.round(accuracy)} m raw)`
+                            : "REJECTED (unknown accuracy)",
+                        "#c62828"
+                    );
+
+                    if (messageElement) {
+                        messageElement.textContent =
+                            Number.isFinite(accuracy)
+                                ? `GPS accuracy is ${Math.round(accuracy)} m. Move outdoors and wait for ≤ ${MAX_RAW_GPS_ACCURACY} m.`
+                                : "GPS did not provide an accuracy value. Wait for a reliable fix.";
+                    }
+
+                    return;
+                }
+
+                acceptedGpsFixes.push(
+                    {
+                        latitude: latitude,
+                        longitude: longitude,
+                        accuracy: accuracy,
+                        timestamp: Date.now()
+                    }
+                );
+
+                acceptedGpsFixes = acceptedGpsFixes.slice(
+                    -GPS_FIX_WINDOW_SIZE
+                );
+
+                const stabilizedLocation = getStabilizedLocation();
+
+                if (
+                    !stabilizedLocation ||
+                    stabilizedLocation.accuracy > REQUIRED_STABILIZED_ACCURACY
+                ) {
+
+                    if (gpsStatus) {
+                        gpsStatus.textContent = "STABILIZING GPS";
+                        gpsStatus.className = "status connecting";
+                    }
+
+                    setGpsReliability(
+                        `${acceptedGpsFixes.length}/${GPS_FIX_WINDOW_SIZE} good fixes`,
+                        "#b26a00"
+                    );
+
+                    if (messageElement) {
+                        messageElement.textContent =
+                            "Collecting reliable GPS fixes before enabling routing.";
+                    }
+
+                    return;
+                }
+
+                latitude = stabilizedLocation.latitude;
+                longitude = stabilizedLocation.longitude;
+                accuracy = stabilizedLocation.accuracy;
+
 
                 // -----------------------------------------
                 // SAVE CURRENT AMBULANCE LOCATION
@@ -1536,7 +1879,10 @@ function startGPS() {
                 currentAmbulanceLocation = {
                     latitude: latitude,
                     longitude: longitude,
-                    accuracy: accuracy
+                    accuracy: accuracy,
+                    rawAccuracy: stabilizedLocation.rawAccuracy,
+                    timestamp: stabilizedLocation.timestamp,
+                    reliable: true
                 };
 
 
@@ -1579,10 +1925,15 @@ function startGPS() {
 
                 if (gpsStatus) {
                     gpsStatus.textContent =
-                        "LIVE";
+                        "GPS READY";
                     gpsStatus.className =
                         "status live";
                 }
+
+                setGpsReliability(
+                    `READY (${Math.round(accuracy)} m stabilized)`,
+                    "#2e7d32"
+                );
 
 
                 // -----------------------------------------
@@ -1610,13 +1961,14 @@ function startGPS() {
                 );
 
                 // -----------------------------------------
-                // UPDATE THE NEXT JUNCTION FOR THIS ROUTE
-                // No signal priority is activated at this stage.
+                // UPDATE THE NEXT JUNCTION AND SINGLE PRIORITY STATE
                 // -----------------------------------------
 
                 if (routeData && routeJunctions.length > 0) {
                     updateNextJunction();
                 }
+
+                requestControlledRouteRecalculation();
 
 
                 // -----------------------------------------
@@ -1646,6 +1998,8 @@ function startGPS() {
                         latitude: latitude,
                         longitude: longitude,
                         accuracy: accuracy,
+                        rawAccuracy: stabilizedLocation.rawAccuracy,
+                        stabilized: true,
                         timestamp: Date.now(),
                         active: true,
                         mode: "browser-live"
@@ -1766,6 +2120,8 @@ function stopGPS() {
     lastGpsTimestamp = null;
 
     currentAmbulanceLocation = null;
+    acceptedGpsFixes = [];
+    setGpsReliability("STOPPED", "#777");
 
 
     // -------------------------------------------------
@@ -1870,6 +2226,38 @@ function stopGPS() {
     console.log(
         "Live GPS stopped."
     );
+}
+
+
+// =====================================================
+// GPS STALE-DATA PROTECTION
+// =====================================================
+
+function monitorGpsFreshness() {
+
+    if (
+        !gpsSessionStarted ||
+        !lastGpsTimestamp ||
+        Date.now() - lastGpsTimestamp <= GPS_STALE_AFTER
+    ) {
+        return;
+    }
+
+    currentAmbulanceLocation = null;
+    lastGpsTimestamp = null;
+    clearRoute();
+
+    if (gpsStatus) {
+        gpsStatus.textContent = "GPS STALE";
+        gpsStatus.className = "status stopped";
+    }
+
+    setGpsReliability("STALE — ROUTING PAUSED", "#c62828");
+
+    if (messageElement) {
+        messageElement.textContent =
+            "No reliable GPS update for 15 seconds. Route and priority were paused.";
+    }
 }
 
 
@@ -2068,6 +2456,8 @@ resetRouteDisplay();
 // =====================================================
 
 initializeMap();
+
+setInterval(monitorGpsFreshness, 3000);
 
 
 // =====================================================
