@@ -62,8 +62,20 @@ const startButton = document.getElementById("startButton");
 const stopButton = document.getElementById("stopButton");
 
 let gpsWatchId = null;
+let gpsSessionStarted = false;
+let lastGpsTimestamp = null;
 
 function startGPS() {
+
+    gpsSessionStarted = true;
+lastGpsTimestamp = null;
+
+gpsStatus.textContent = "STARTING...";
+
+latitudeElement.textContent = "--";
+longitudeElement.textContent = "--";
+accuracyElement.textContent = "--";
+lastUpdateElement.textContent = "--";
 
     if (!navigator.geolocation) {
         console.error("Geolocation is not supported.");
@@ -80,6 +92,13 @@ function startGPS() {
             const latitude = position.coords.latitude;
             const longitude = position.coords.longitude;
             const accuracy = position.coords.accuracy;
+
+            const gpsTime = new Date();
+
+lastGpsTimestamp = gpsTime.getTime();
+
+lastUpdateElement.textContent =
+    gpsTime.toLocaleTimeString();
 
             console.log(
                 "GPS LOCATION:",
@@ -287,4 +306,3 @@ function updateAmbulanceMarker(
 
 // Start map
 initializeMap();
-
