@@ -149,11 +149,13 @@ let routeData = null;
 let hospitalMarker = null;
 let junctionMarkers = new Map();
 let routeJunctions = [];
+let passedJunctionIds = new Set();
 let activePriorityJunctionId = null;
 let acceptedGpsFixes = [];
 let lastRouteOrigin = null;
 let lastRouteCalculatedAt = 0;
 let routeRequestInProgress = false;
+let ambulanceLocationSource = null;
 
 
 // =====================================================
@@ -338,6 +340,102 @@ onValue(
 
 
 // =====================================================
+// AMBULANCE ESP32 / NEO-6M INPUT
+// The dashboard uses the same route logic for hardware GPS.
+// =====================================================
+
+function applyHardwareAmbulanceLocation(data) {
+
+    const latitude = Number(data.latitude);
+    const longitude = Number(data.longitude);
+    const accuracy = Number(data.accuracy);
+
+    if (
+        !data.active ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        !Number.isFinite(accuracy)
+    ) {
+        return;
+    }
+
+    ambulanceLocationSource = "esp32";
+    lastGpsTimestamp = Date.now();
+
+    if (accuracy > MAX_RAW_GPS_ACCURACY) {
+
+        if (gpsStatus) {
+            gpsStatus.textContent = "HARDWARE GPS UNRELIABLE";
+            gpsStatus.className = "status stopped";
+        }
+
+        setGpsReliability(
+            `REJECTED (${Math.round(accuracy)} m hardware)`,
+            "#c62828"
+        );
+
+        return;
+    }
+
+    currentAmbulanceLocation = {
+        latitude: latitude,
+        longitude: longitude,
+        accuracy: accuracy,
+        rawAccuracy: accuracy,
+        timestamp: Date.now(),
+        reliable: true
+    };
+
+    if (latitudeElement) {
+        latitudeElement.textContent = latitude.toFixed(6);
+    }
+
+    if (longitudeElement) {
+        longitudeElement.textContent = longitude.toFixed(6);
+    }
+
+    if (accuracyElement) {
+        accuracyElement.textContent = `${Math.round(accuracy)} m`;
+    }
+
+    if (lastUpdateElement) {
+        lastUpdateElement.textContent = new Date().toLocaleTimeString();
+    }
+
+    if (gpsStatus) {
+        gpsStatus.textContent = "HARDWARE GPS READY";
+        gpsStatus.className = "status live";
+    }
+
+    setGpsReliability(
+        `READY (${Math.round(accuracy)} m NEO-6M)`,
+        "#2e7d32"
+    );
+
+    updateAmbulanceMarker(latitude, longitude, accuracy);
+
+    if (routeData && routeJunctions.length > 0) {
+        updateNextJunction();
+    }
+
+    requestControlledRouteRecalculation();
+}
+
+
+onValue(
+    ref(database, "ambulance"),
+    (snapshot) => {
+
+        const data = snapshot.val();
+
+        if (data && data.mode === "esp32-neo6m") {
+            applyHardwareAmbulanceLocation(data);
+        }
+    }
+);
+
+
+// =====================================================
 // INITIALIZE MAP
 // =====================================================
 
@@ -370,6 +468,14 @@ function initializeMap() {
     ).addTo(map);
 
     initializeJunctionMarkers();
+
+    if (currentAmbulanceLocation) {
+        updateAmbulanceMarker(
+            currentAmbulanceLocation.latitude,
+            currentAmbulanceLocation.longitude,
+            currentAmbulanceLocation.accuracy
+        );
+    }
 
     console.log("Map initialized successfully");
 
@@ -580,6 +686,8 @@ function updateJunctionMarkerStyles(nextJunctionId = null) {
                     (item) => item.id === junction.id
                 );
 
+            const hasBeenPassed = passedJunctionIds.has(junction.id);
+
             if (junction.id === nextJunctionId) {
 
                 marker.setStyle(
@@ -590,6 +698,17 @@ function updateJunctionMarkerStyles(nextJunctionId = null) {
                 );
 
                 marker.setRadius(10);
+
+            } else if (hasBeenPassed) {
+
+                marker.setStyle(
+                    {
+                        color: "#546e7a",
+                        fillColor: "#b0bec5"
+                    }
+                );
+
+                marker.setRadius(7);
 
             } else if (routeJunction) {
 
@@ -789,11 +908,33 @@ function updateNextJunction() {
         return;
     }
 
-    const nextJunction = routeJunctions.find(
-        (junction) =>
-            junction.routePosition >=
-            ambulanceProjection.routePosition - JUNCTION_PASSED_ROUTE_BUFFER
-    ) || null;
+    // Mark every route junction that is safely behind the ambulance as passed.
+    // This state remains when OSRM refreshes the route, so a crossed junction
+    // cannot become the next junction again.
+    routeJunctions.forEach(
+        (junction) => {
+
+            if (
+                !passedJunctionIds.has(junction.id) &&
+                ambulanceProjection.routePosition >
+                    junction.routePosition + JUNCTION_PASSED_ROUTE_BUFFER
+            ) {
+                passedJunctionIds.add(junction.id);
+
+                if (activePriorityJunctionId === junction.id) {
+                    activePriorityJunctionId = null;
+                }
+
+                console.log("Junction passed:", junction.id);
+            }
+        }
+    );
+
+    const remainingJunctions = routeJunctions.filter(
+        (junction) => !passedJunctionIds.has(junction.id)
+    );
+
+    const nextJunction = remainingJunctions[0] || null;
 
     updateJunctionMarkerStyles(
         nextJunction ? nextJunction.id : null
@@ -802,8 +943,8 @@ function updateNextJunction() {
     if (junctionSequenceElement) {
 
         junctionSequenceElement.textContent =
-            routeJunctions.length > 0
-                ? routeJunctions.map((junction) => junction.id).join(" → ")
+            remainingJunctions.length > 0
+                ? remainingJunctions.map((junction) => junction.id).join(" → ")
                 : "No fixed junctions on this route";
     }
 
@@ -862,9 +1003,8 @@ function updateJunctionPriority(
     );
 
     if (
-        activeJunction &&
-        ambulanceRoutePosition >
-            activeJunction.routePosition + JUNCTION_PASSED_ROUTE_BUFFER
+        activePriorityJunctionId &&
+        (!activeJunction || passedJunctionIds.has(activePriorityJunctionId))
     ) {
         activePriorityJunctionId = null;
     }
@@ -899,6 +1039,8 @@ function updateJunctionPriority(
             junctionStates[junction.id] = {
                 status: junction.id === activePriorityJunctionId
                     ? "PRIORITY_ACTIVE"
+                    : passedJunctionIds.has(junction.id)
+                        ? "PASSED"
                     : junction.id === nextJunction?.id
                         ? "NEXT"
                         : onRoute
@@ -926,6 +1068,7 @@ function updateJunctionPriority(
 function resetJunctionAnalysis() {
 
     routeJunctions = [];
+    passedJunctionIds.clear();
     activePriorityJunctionId = null;
 
     if (nextJunctionElement) {
@@ -1691,6 +1834,7 @@ function startGPS() {
     // -------------------------------------------------
 
     gpsSessionStarted = true;
+    ambulanceLocationSource = "browser";
 
     lastGpsTimestamp = null;
 
@@ -2092,6 +2236,8 @@ function startGPS() {
 
 function stopGPS() {
 
+    const stoppedSource = ambulanceLocationSource;
+
     console.log(
         "Stopping live GPS..."
     );
@@ -2191,31 +2337,34 @@ function stopGPS() {
             "ambulance"
         );
 
-    set(
-        ambulanceRef,
-        {
-            active: false,
-            timestamp: Date.now(),
-            mode: "browser-live"
-        }
-    )
-    .then(
-        () => {
+    if (stoppedSource === "browser") {
 
-            console.log(
-                "Firebase ambulance status set to inactive."
-            );
-        }
-    )
-    .catch(
-        (error) => {
+        set(
+            ambulanceRef,
+            {
+                active: false,
+                timestamp: Date.now(),
+                mode: "browser-live"
+            }
+        )
+        .then(
+            () => {
 
-            console.error(
-                "Failed to update Firebase:",
-                error
-            );
-        }
-    );
+                console.log(
+                    "Firebase ambulance status set to inactive."
+                );
+            }
+        )
+        .catch(
+            (error) => {
+
+                console.error(
+                    "Failed to update Firebase:",
+                    error
+                );
+            }
+        );
+    }
 
 
     if (messageElement) {
