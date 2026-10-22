@@ -129,7 +129,7 @@ const junctionSequenceElement =
 // =====================================================
 // APPLICATION VARIABLES
 // =====================================================
-
+let lastAmbulanceRoutePosition = null;
 let gpsWatchId = null;
 let gpsSessionStarted = false;
 let lastGpsTimestamp = null;
@@ -770,13 +770,17 @@ function calculateHaversineDistance(
 }
 
 
+
 function projectPointOntoRoute(
     latitude,
     longitude,
-    routeCoordinates
+    routeCoordinates,
+    minimumRoutePosition = Number.NEGATIVE_INFINITY
 ) {
-
-    if (!Array.isArray(routeCoordinates) || routeCoordinates.length < 2) {
+    if (
+        !Array.isArray(routeCoordinates) ||
+        routeCoordinates.length < 2
+    ) {
         return null;
     }
 
@@ -788,8 +792,11 @@ function projectPointOntoRoute(
     let routePosition = 0;
     let distanceBeforeSegment = 0;
 
-    for (let index = 0; index < routeCoordinates.length - 1; index += 1) {
-
+    for (
+        let index = 0;
+        index < routeCoordinates.length - 1;
+        index += 1
+    ) {
         const start = routeCoordinates[index];
         const end = routeCoordinates[index + 1];
 
@@ -804,6 +811,7 @@ function projectPointOntoRoute(
 
         const segmentX = endX - startX;
         const segmentY = endY - startY;
+
         const segmentLengthSquared =
             segmentX ** 2 + segmentY ** 2;
 
@@ -823,24 +831,39 @@ function projectPointOntoRoute(
             0,
             Math.min(
                 1,
-                -((startX * segmentX) + (startY * segmentY)) /
-                    segmentLengthSquared
+                -(
+                    startX * segmentX +
+                    startY * segmentY
+                ) / segmentLengthSquared
             )
         );
 
-        const nearestX = startX + projectionRatio * segmentX;
-        const nearestY = startY + projectionRatio * segmentY;
+        const nearestX =
+            startX + projectionRatio * segmentX;
+        const nearestY =
+            startY + projectionRatio * segmentY;
+
         const distanceToSegment = Math.sqrt(
             nearestX ** 2 + nearestY ** 2
         );
 
-        if (distanceToSegment < closestDistance) {
+        const candidateRoutePosition =
+            distanceBeforeSegment +
+            projectionRatio * segmentLength;
+
+        if (
+            candidateRoutePosition >= minimumRoutePosition &&
+            distanceToSegment < closestDistance
+        ) {
             closestDistance = distanceToSegment;
-            routePosition =
-                distanceBeforeSegment + projectionRatio * segmentLength;
+            routePosition = candidateRoutePosition;
         }
 
         distanceBeforeSegment += segmentLength;
+    }
+
+    if (!Number.isFinite(closestDistance)) {
+        return null;
     }
 
     return {
@@ -848,6 +871,7 @@ function projectPointOntoRoute(
         routePosition: routePosition
     };
 }
+
 
 
 // =====================================================
@@ -890,45 +914,55 @@ function analyzeRouteJunctions(routeCoordinates) {
 }
 
 
-function updateNextJunction() {
 
+function updateNextJunction() {
     if (!routeData || !currentAmbulanceLocation) {
         return;
     }
 
     const routeCoordinates = routeData.geometry.coordinates;
 
+    // Prevent the projected position from jumping far backward.
+    const minimumRoutePosition =
+        lastAmbulanceRoutePosition === null
+            ? Number.NEGATIVE_INFINITY
+            : Math.max(0, lastAmbulanceRoutePosition - 5);
+
     const ambulanceProjection = projectPointOntoRoute(
         currentAmbulanceLocation.latitude,
         currentAmbulanceLocation.longitude,
-        routeCoordinates
+        routeCoordinates,
+        minimumRoutePosition
     );
 
     if (!ambulanceProjection) {
         return;
     }
 
-    // Mark every route junction that is safely behind the ambulance as passed.
-    // This state remains when OSRM refreshes the route, so a crossed junction
-    // cannot become the next junction again.
-    routeJunctions.forEach(
-        (junction) => {
-
-            if (
-                !passedJunctionIds.has(junction.id) &&
-                ambulanceProjection.routePosition >
-                    junction.routePosition + JUNCTION_PASSED_ROUTE_BUFFER
-            ) {
-                passedJunctionIds.add(junction.id);
-
-                if (activePriorityJunctionId === junction.id) {
-                    activePriorityJunctionId = null;
-                }
-
-                console.log("Junction passed:", junction.id);
-            }
-        }
+    // Keep route progress moving forward.
+    lastAmbulanceRoutePosition = Math.max(
+        lastAmbulanceRoutePosition ?? 0,
+        ambulanceProjection.routePosition
     );
+
+    const currentRoutePosition = lastAmbulanceRoutePosition;
+
+    // Mark junctions passed when the ambulance progresses beyond them.
+    routeJunctions.forEach((junction) => {
+        if (
+            !passedJunctionIds.has(junction.id) &&
+            currentRoutePosition >
+                junction.routePosition + JUNCTION_PASSED_ROUTE_BUFFER
+        ) {
+            passedJunctionIds.add(junction.id);
+
+            if (activePriorityJunctionId === junction.id) {
+                activePriorityJunctionId = null;
+            }
+
+            console.log("Junction passed:", junction.id);
+        }
+    });
 
     const remainingJunctions = routeJunctions.filter(
         (junction) => !passedJunctionIds.has(junction.id)
@@ -941,7 +975,6 @@ function updateNextJunction() {
     );
 
     if (junctionSequenceElement) {
-
         junctionSequenceElement.textContent =
             remainingJunctions.length > 0
                 ? remainingJunctions.map((junction) => junction.id).join(" → ")
@@ -949,11 +982,10 @@ function updateNextJunction() {
     }
 
     if (!nextJunction) {
-
         updateJunctionPriority(
             null,
             Number.POSITIVE_INFINITY,
-            ambulanceProjection.routePosition
+            currentRoutePosition
         );
 
         if (nextJunctionElement) {
@@ -987,9 +1019,10 @@ function updateNextJunction() {
     updateJunctionPriority(
         nextJunction,
         distanceToNextJunction,
-        ambulanceProjection.routePosition
+        currentRoutePosition
     );
 }
+
 
 
 function updateJunctionPriority(
