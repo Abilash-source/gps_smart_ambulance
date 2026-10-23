@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Traffic Ambulance — Automated Unit Tests</title>
+  <style>
+    body { font-family: ui-sans-serif, system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 30px; }
+    .container { max-width: 800px; margin: 0 auto; background: #1e293b; padding: 25px; border-radius: 12px; }
+    h1 { font-size: 20px; border-bottom: 1px solid #334155; padding-bottom: 12px; margin-top: 0; }
+    .suite-title { font-size: 15px; font-weight: bold; color: #38bdf8; margin: 20px 0 8px; border-left: 3px solid #38bdf8; padding-left: 8px; }
+    .test-result { padding: 6px 10px; margin: 4px 0; border-radius: 6px; font-size: 13px; font-family: ui-monospace, monospace; }
+    .pass { background: rgba(34, 197, 94, 0.15); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.3); }
+    .fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.4); }
+    .summary { margin-top: 25px; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 14px; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧪 Automated Unit Tests (Zero-Dependency Engine)</h1>
+    <div id="results"></div>
+    <div id="summary" class="summary" style="display:none;"></div>
+  </div>
+
+  <script type="module">
+    import { runRouteProjectionTests } from "./route-projection.test.js";
+    import { runJunctionOrderTests } from "./junction-order.test.js";
+    import { runPriorityManagerTests } from "./priority-manager.test.js";
+
+    const resultsEl = document.getElementById("results");
+    const summaryEl = document.getElementById("summary");
+
+    let totalTests = 0;
+    let passedTests = 0;
+    let failedTests = 0;
+
+    const assert = {
+      suite(name) {
+        const h = document.createElement("div");
+        h.className = "suite-title";
+        h.textContent = `▶ Suite: ${name}`;
+        resultsEl.appendChild(h);
+      },
+      isTrue(condition, message) {
+        totalTests++;
+        if (condition) {
+          passedTests++;
+          this.log(true, `PASS: ${message}`);
+        } else {
+          failedTests++;
+          this.log(false, `FAIL: ${message}`);
+        }
+      },
+      equal(actual, expected, message) {
+        totalTests++;
+        if (actual === expected) {
+          passedTests++;
+          this.log(true, `PASS: ${message} (Value: ${actual})`);
+        } else {
+          failedTests++;
+          this.log(false, `FAIL: ${message} (Expected: ${expected}, Got: ${actual})`);
+        }
+      },
+      log(isPass, text) {
+        const div = document.createElement("div");
+        div.className = `test-result ${isPass ? "pass" : "fail"}`;
+        div.textContent = `${isPass ? "✓" : "✗"} ${text}`;
+        resultsEl.appendChild(div);
+      }
+    };
+
+    try {
+      runRouteProjectionTests(assert);
+      runJunctionOrderTests(assert);
+      runPriorityManagerTests(assert);
+    } catch (e) {
+      assert.log(false, `Fatal Test Execution Error: ${e.message}`);
+    }
+
+    summaryEl.style.display = "block";
+    if (failedTests === 0) {
+      summaryEl.style.background = "rgba(34, 197, 94, 0.2)";
+      summaryEl.style.color = "#4ade80";
+      summaryEl.style.border = "1px solid #22c55e";
+      summaryEl.textContent = `🎉 ALL ${passedTests} TESTS PASSED WITH 0 FAILURES`;
+    } else {
+      summaryEl.style.background = "rgba(239, 68, 68, 0.25)";
+      summaryEl.style.color = "#f87171";
+      summaryEl.style.border = "1px solid #ef4444";
+      summaryEl.textContent = `⚠️ ${failedTests} FAILED out of ${totalTests} total tests`;
+    }
+  </script>
+</body>
+</html>

@@ -1,29 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
     <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1.0">
-
-    <meta name="description"
-          content="Smart Traffic Ambulance - Intelligent Ambulance Traffic Priority System">
-
-    <title>Smart Traffic Ambulance</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Smart Traffic Ambulance - Intelligent Ambulance Traffic Priority System">
+    <title>Smart Traffic Ambulance Priority System</title>
 
     <!-- Main CSS -->
-    <link rel="stylesheet"
-          href="style.css">
+    <link rel="stylesheet" href="css/style.css">
 
     <!-- Leaflet CSS -->
-    <link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 </head>
-
-
 <body>
 
 <div class="container">
@@ -31,476 +19,240 @@
     <!-- ==================================================
          HEADER
     ================================================== -->
-
     <header class="main-header">
-
         <div class="header-icon">
             🚑
         </div>
-
         <div>
-            <h1>
-                Smart Traffic Ambulance
-            </h1>
-
-            <p>
-                Intelligent Ambulance Traffic Priority System
-            </p>
+            <h1>Smart Traffic Ambulance</h1>
+            <p>Intelligent Ambulance Traffic Priority System • OSRM Routing &amp; ESP32 Hardware Priority Sync</p>
         </div>
-
     </header>
 
-
     <!-- ==================================================
-         SYSTEM STATUS
+         SYSTEM & FIREBASE STATUS
     ================================================== -->
-
     <section class="status-section">
-
         <div class="status-card">
-
-            <div class="status-title">
-                📍 GPS Status
-            </div>
-
-            <span id="gpsStatus"
-                  class="status stopped">
-
+            <div class="status-title">📍 GPS Sensor Telemetry</div>
+            <span id="gpsStatus" class="status stopped">
                 WAITING FOR GPS
-
             </span>
-
         </div>
-
 
         <div class="status-card">
-
-            <div class="status-title">
-                🔥 Firebase
-            </div>
-
-            <span id="firebaseStatus"
-                  class="status connecting">
-
+            <div class="status-title">🔥 Firebase Realtime Database</div>
+            <span id="firebaseStatus" class="status connecting">
                 CONNECTING...
-
             </span>
-
         </div>
-
     </section>
 
-
     <!-- ==================================================
-         LIVE GPS DATA
+         LIVE GPS SENSOR DATA
     ================================================== -->
-
     <section class="data-section">
-
         <div class="data-card">
-
-            <span class="data-label">
-                Latitude
-            </span>
-
-            <strong id="latitude">
-                --
-            </strong>
-
+            <span class="data-label">Latitude</span>
+            <strong id="latitude">--</strong>
         </div>
 
-
         <div class="data-card">
-
-            <span class="data-label">
-                Longitude
-            </span>
-
-            <strong id="longitude">
-                --
-            </strong>
-
+            <span class="data-label">Longitude</span>
+            <strong id="longitude">--</strong>
         </div>
 
-
         <div class="data-card">
-
-            <span class="data-label">
-                GPS Accuracy
-            </span>
-
-            <strong id="accuracy">
-                --
-            </strong>
-
+            <span class="data-label">GPS Accuracy</span>
+            <strong id="accuracy">--</strong>
         </div>
 
-
         <div class="data-card">
-
-            <span class="data-label">
-                Last Update
-            </span>
-
-            <strong id="lastUpdate">
-                --
-            </strong>
-
+            <span class="data-label">Last Update</span>
+            <strong id="lastUpdate">--</strong>
         </div>
 
-
         <div class="data-card">
-
-            <span class="data-label">
-                Location Reliability
-            </span>
-
-            <strong id="gpsReliability">
-                WAITING
-            </strong>
-
+            <span class="data-label">Location Reliability</span>
+            <strong id="gpsReliability">WAITING</strong>
         </div>
-
     </section>
 
-
     <!-- ==================================================
-         DESTINATION
+         DESTINATION HOSPITAL SELECTION
     ================================================== -->
-
     <section class="destination-section">
-
         <div class="section-heading">
-
             <div>
-                <h2>
-                    🏥 Select Destination
-                </h2>
-
-                <p>
-                    Select a fixed hospital to calculate
-                    the ambulance road route.
-                </p>
+                <h2>🏥 Select Destination Hospital</h2>
+                <p>Select a predefined fixed hospital to calculate the actual road driving route.</p>
             </div>
-
         </div>
-
 
         <div class="destination-controls">
-
             <select id="hospitalSelect">
-
-                <option value="">
-                    Select Hospital
-                </option>
-
+                <option value="">Select Destination Hospital</option>
             </select>
 
-
-            <button id="routeButton"
-                    class="route-button">
-
-                🗺️ Calculate Route
-
+            <button id="routeButton" class="route-button">
+                🗺️ Calculate Route (OSRM)
             </button>
-
         </div>
-
     </section>
-
 
     <!-- ==================================================
-         MAP
+         LIVE ROUTE MAP
     ================================================== -->
-
     <section class="map-section">
-
         <div class="section-heading">
-
             <div>
-                <h2>
-                    🗺️ Live Route Map
-                </h2>
-
-                <p>
-                    Live ambulance position, fixed junctions,
-                    hospital and actual road route.
-                </p>
+                <h2>🗺️ Live Route Corridor Map</h2>
+                <p>Live ambulance location, road-aware fixed junctions, destination hospital, and driving path.</p>
             </div>
-
         </div>
 
-
         <div id="map"></div>
-
     </section>
-
 
     <!-- ==================================================
          MAP LEGEND
     ================================================== -->
-
     <section class="legend">
-
         <div class="legend-item">
-
-            <span class="legend-marker legend-junction">
-            </span>
-
-            <span>
-                Fixed Traffic Junction
-            </span>
-
+            <span class="legend-marker legend-junction"></span>
+            <span>Fixed Traffic Junction (≤50m)</span>
         </div>
 
-
         <div class="legend-item">
-
-            <span class="legend-marker legend-ambulance">
-            </span>
-
-            <span>
-                Live Ambulance
-            </span>
-
+            <span class="legend-marker legend-ambulance"></span>
+            <span>Ambulance Position</span>
         </div>
 
-
         <div class="legend-item">
-
-            <span class="legend-marker legend-hospital">
-            </span>
-
-            <span>
-                Fixed Hospital
-            </span>
-
+            <span class="legend-marker legend-hospital"></span>
+            <span>Fixed Hospital Target</span>
         </div>
 
-
         <div class="legend-item">
-
-            <span class="legend-route">
-            </span>
-
-            <span>
-                Ambulance Route
-            </span>
-
+            <span class="legend-route"></span>
+            <span>OSRM Road Corridor</span>
         </div>
-
     </section>
 
-
     <!-- ==================================================
-         ROUTE INFORMATION
+         ROUTE METRICS & NEXT JUNCTION PRIORITY
     ================================================== -->
-
     <section class="route-section">
-
-        <h2>
-            🚦 Route Information
-        </h2>
-
+        <h2>🚦 Route Information &amp; Priority State</h2>
 
         <div class="route-grid">
-
-            <!-- Destination -->
-
             <div class="route-card">
-
-                <span class="route-card-label">
-                    Destination
-                </span>
-
-                <strong id="destinationName">
-                    Not selected
-                </strong>
-
+                <span class="route-card-label">Destination</span>
+                <strong id="destinationName">Not selected</strong>
             </div>
 
-
-            <!-- Route Distance -->
-
             <div class="route-card">
-
-                <span class="route-card-label">
-                    Route Distance
-                </span>
-
-                <strong id="routeDistance">
-                    --
-                </strong>
-
+                <span class="route-card-label">Driving Distance</span>
+                <strong id="routeDistance">--</strong>
             </div>
 
-
-            <!-- Estimated Time -->
-
             <div class="route-card">
-
-                <span class="route-card-label">
-                    Estimated Time
-                </span>
-
-                <strong id="routeTime">
-                    --
-                </strong>
-
+                <span class="route-card-label">Estimated Time (ETA)</span>
+                <strong id="routeTime">--</strong>
             </div>
 
-
-            <!-- Next Junction -->
-
             <div class="route-card">
-
-                <span class="route-card-label">
-                    Next Junction
-                </span>
-
-                <strong id="nextJunction">
-                    Waiting for GPS
-                </strong>
-
+                <span class="route-card-label">Next Junction</span>
+                <strong id="nextJunction">Waiting for route</strong>
             </div>
 
-
-            <!-- Junction Distance -->
-
             <div class="route-card">
-
-                <span class="route-card-label">
-                    Distance to Junction
-                </span>
-
-                <strong id="junctionDistance">
-                    --
-                </strong>
-
+                <span class="route-card-label">Distance Along Road</span>
+                <strong id="junctionDistance">--</strong>
             </div>
-
-
-            <!-- Traffic Priority -->
 
             <div class="route-card priority-card">
-
-                <span class="route-card-label">
-                    Traffic Priority
-                </span>
-
-                <strong id="routeStatus">
-                    Normal
-                </strong>
-
+                <span class="route-card-label">Traffic Light Priority</span>
+                <strong id="routeStatus">Normal</strong>
             </div>
-
         </div>
-
     </section>
 
-
     <!-- ==================================================
-         JUNCTION SEQUENCE
+         ORDERED JUNCTION CORRIDOR (Section 9)
     ================================================== -->
-
     <section class="sequence-section">
-
         <div class="section-heading">
-
             <div>
-                <h2>
-                    🚦 Junctions on Route
-                </h2>
-
-                <p>
-                    Fixed junctions detected along the
-                    ambulance's actual road route.
-                </p>
+                <h2>🚦 Ordered Junction Corridor</h2>
+                <p>Sequential fixed junctions detected along the road route within 50m radius.</p>
             </div>
-
         </div>
 
-
-        <div id="junctionSequence"
-             class="junction-sequence">
-
+        <div id="junctionSequence" class="junction-sequence">
             Select a hospital to calculate the route.
+        </div>
+    </section>
 
+    <!-- ==================================================
+         VIRTUAL ARDUINO SERIAL MONITOR (Section 12)
+    ================================================== -->
+    <section class="serial-section">
+        <div class="section-heading">
+            <div>
+                <h2>💻 ESP32 Hardware UART &amp; Priority Telemetry (115200 Baud)</h2>
+                <p>Live stream of incoming Firebase events, GPIO pin toggles (Red: G25, Yellow: G26, Green: G27), and junction states.</p>
+            </div>
         </div>
 
+        <div id="serialOutput" class="serial-console">
+            <div style="color: #64748b; font-style: italic;">[UART0] Listening on 115200 baud... Connecting to Firebase Realtime Database...</div>
+        </div>
     </section>
 
-
     <!-- ==================================================
-         GPS CONTROL BUTTONS
+         CONTROL BUTTONS
     ================================================== -->
-
     <section class="button-section">
-
-        <button id="startButton"
-                class="start-button">
-
-            ▶ Start Live GPS
-
+        <button id="startButton" class="start-button">
+            ▶ Start Live Phone GPS
         </button>
 
-
-        <button id="stopButton"
-                class="stop-button"
-                disabled>
-
+        <button id="stopButton" class="stop-button" disabled>
             ■ Stop GPS
-
         </button>
 
+        <button id="simButton" style="background:#0284c7; color:white;">
+            🚗 Test Drive Route (Simulator)
+        </button>
     </section>
 
-
     <!-- ==================================================
-         SYSTEM MESSAGE
+         SYSTEM MESSAGE BANNER
     ================================================== -->
-
-    <div id="message"
-         class="message">
-
-        Select a hospital and start live GPS.
-
+    <div id="message" class="message">
+        Select a hospital and start live GPS or run the route drive simulator.
     </div>
-
 
     <!-- ==================================================
          FOOTER
     ================================================== -->
-
     <footer>
-
-        <strong>
-            Smart Traffic Ambulance
-        </strong>
-
-        <span>
-            ESP32 • GPS • Firebase • OSRM • Leaflet
-        </span>
-
+        <strong>Smart Traffic Ambulance Priority System</strong>
+        <span>ESP32 • NEO-6M • Firebase RTDB • OSRM Routing • Leaflet.js</span>
     </footer>
 
 </div>
 
-
-<!-- ========================   ==============================
+<!-- ======================================================
      LEAFLET JAVASCRIPT
 ====================================================== -->
-
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <!-- ======================================================
-     APPLICATION JAVASCRIPT
+     MODULAR APPLICATION JAVASCRIPT
 ====================================================== -->
-
-<script type="module"
-        src="app.js">
-</script>
+<script type="module" src="js/app.js"></script>
 
 </body>
-
 </html>

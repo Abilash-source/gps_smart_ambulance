@@ -1,0 +1,53 @@
+{
+  "rules": {
+    "ambulance": {
+      ".read": true,
+      ".write": true,
+      ".validate": "newData.hasChildren(['latitude', 'longitude', 'accuracy', 'timestamp', 'active', 'mode'])",
+      "latitude": {
+        ".validate": "newData.isNumber() && newData.val() >= -90 && newData.val() <= 90"
+      },
+      "longitude": {
+        ".validate": "newData.isNumber() && newData.val() >= -180 && newData.val() <= 180"
+      },
+      "accuracy": {
+        ".validate": "newData.isNumber() && newData.val() >= 0"
+      },
+      "timestamp": {
+        ".validate": "newData.isNumber()"
+      },
+      "active": {
+        ".validate": "newData.isBoolean()"
+      },
+      "mode": {
+        ".validate": "newData.isString() && (newData.val() == 'browser-live' || newData.val() == 'esp32-neo6m' || newData.val() == 'simulated' || newData.val() == 'manual-click')"
+      }
+    },
+    "junctionPriority": {
+      ".read": true,
+      ".write": true,
+      ".validate": "newData.hasChildren(['states', 'timestamp'])",
+      "timestamp": {
+        ".validate": "newData.isNumber()"
+      },
+      "version": {
+        ".validate": "newData.isNumber()"
+      },
+      "states": {
+        "$junctionId": {
+          ".validate": "newData.hasChildren(['status'])",
+          "status": {
+            ".validate": "newData.isString() && (newData.val() == 'NOT_ON_ROUTE' || newData.val() == 'WAITING' || newData.val() == 'NEXT' || newData.val() == 'PRIORITY_ACTIVE' || newData.val() == 'PASSED' || newData.val() == 'NORMAL')"
+          }
+        }
+      }
+    },
+    "junctionDevices": {
+      ".read": true,
+      ".write": true,
+      "$deviceId": {
+        ".validate": "newData.hasChildren(['id', 'online', 'lastSeen'])"
+      }
+    }
+  }
+}
