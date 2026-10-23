@@ -72,7 +72,7 @@ const junctions = [
 // Threshold Constants (Sections 7, 9, 10, 11)
 const JUNCTION_ROUTE_RADIUS = 50;           // 50m perpendicular corridor limit
 const JUNCTION_PASSED_ROUTE_BUFFER = 8;     // 8m passed buffer along route (per user requirement)
-const PRIORITY_DISTANCE = 100;              // 100m priority trigger distance
+const PRIORITY_DISTANCE = 8;                // 8m priority trigger distance (Emergency signal opens 8m away)
 const MAX_RAW_GPS_ACCURACY = 40;            // Max acceptable raw GPS accuracy
 const REQUIRED_STABILIZED_ACCURACY = 25;    // Required stabilized accuracy
 const GPS_FIX_WINDOW_SIZE = 5;
@@ -339,13 +339,11 @@ function updateJunctionPriority(nextJunction, distanceAlongRoute, ambulanceRoute
         activePriorityJunctionId = null;
     }
 
-    // Proximity trigger: within 100m of next junction along route
+    // Proximity trigger: within 8m of next junction along route
     if (nextJunction && distanceAlongRoute <= PRIORITY_DISTANCE) {
         activePriorityJunctionId = nextJunction.id;
     } else {
-        if (activePriorityJunctionId === nextJunction?.id && distanceAlongRoute > PRIORITY_DISTANCE) {
-            activePriorityJunctionId = null;
-        }
+        activePriorityJunctionId = null;
     }
 
     const priorityText = activePriorityJunctionId
@@ -365,10 +363,11 @@ function updateJunctionPriority(nextJunction, distanceAlongRoute, ambulanceRoute
         const onRoute = routeJunctions.some((rj) => rj.id === junction.id);
         let status = "NOT_ON_ROUTE";
 
-        if (junction.id === activePriorityJunctionId) {
-            status = "PRIORITY_ACTIVE";
-        } else if (passedJunctionIds.has(junction.id)) {
+        // Passed junctions take precedence to immediately release green priority
+        if (passedJunctionIds.has(junction.id)) {
             status = "PASSED";
+        } else if (junction.id === activePriorityJunctionId) {
+            status = "PRIORITY_ACTIVE";
         } else if (junction.id === nextJunction?.id) {
             status = "NEXT";
         } else if (onRoute) {

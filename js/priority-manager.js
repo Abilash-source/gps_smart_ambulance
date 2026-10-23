@@ -3,8 +3,9 @@
  * 
  * Enforces Sections 10 & 11:
  * - Exactly one junction can hold PRIORITY_ACTIVE at any given moment.
- * - Activates only when approaching the NEXT junction within 100m along the road.
+ * - Activates only when approaching the NEXT junction within 8m along the road.
  * - Manages state transitions: NOT_ON_ROUTE, WAITING, NEXT, PRIORITY_ACTIVE, PASSED, NORMAL.
+ * - Releases priority and switches to NEXT junction when vehicle moves 8m past current junction.
  * - Tracks command versions and timestamps to prevent stale command execution.
  */
 
@@ -53,14 +54,17 @@ export class PriorityManager {
 
     this.nextJunctionId = nextJunction.id;
 
-    // Priority condition: Vehicle is within PRIORITY_DISTANCE (100m) of next junction along road
+    // If previously active junction is marked PASSED, release priority immediately
+    if (this.activePriorityJunctionId && passedJunctionIds && passedJunctionIds.has(this.activePriorityJunctionId)) {
+      this.activePriorityJunctionId = null;
+    }
+
+    // Priority condition: Emergency signal opens when approaching within 8m of next junction along road
     if (distanceAlongRoute <= THRESHOLDS.PRIORITY_DISTANCE && distanceAlongRoute >= -THRESHOLDS.JUNCTION_PASSED_ROUTE_BUFFER) {
       this.activePriorityJunctionId = nextJunction.id;
     } else {
-      // Vehicle is outside 100m range or passed
-      if (this.activePriorityJunctionId === nextJunction.id && distanceAlongRoute > THRESHOLDS.PRIORITY_DISTANCE) {
-        this.activePriorityJunctionId = null;
-      }
+      // Vehicle is outside 8m trigger zone
+      this.activePriorityJunctionId = null;
     }
 
     const overallStatus = this.activePriorityJunctionId
@@ -87,10 +91,11 @@ export class PriorityManager {
       const isOnRoute = routeJunctions.some((rj) => rj.id === junction.id);
       let junctionStatus = "NOT_ON_ROUTE";
 
-      if (junction.id === activeId) {
-        junctionStatus = "PRIORITY_ACTIVE";
-      } else if (passedJunctionIds && passedJunctionIds.has(junction.id)) {
+      // Passed junctions ALWAYS take highest precedence to ensure green priority shuts off
+      if (passedJunctionIds && passedJunctionIds.has(junction.id)) {
         junctionStatus = "PASSED";
+      } else if (junction.id === activeId) {
+        junctionStatus = "PRIORITY_ACTIVE";
       } else if (junction.id === nextId) {
         junctionStatus = "NEXT";
       } else if (isOnRoute) {

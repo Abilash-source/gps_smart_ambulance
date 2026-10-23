@@ -38,20 +38,20 @@ export const JUNCTIONS = [
   {
     id: "J1",
     name: "Junction 1",
-    latitude: 11.017328,
-    longitude: 76.934561
+    latitude: 11.018563,
+    longitude: 76.934374
   },
   {
     id: "J2",
     name: "Junction 2",
-    latitude: 11.018562,
-    longitude: 76.934487
+    latitude: 11.019186,
+    longitude: 76.934437
   },
   {
     id: "J3",
     name: "Junction 3",
-    latitude: 11.019188,
-    longitude: 76.934478
+    latitude: 11.017374,
+    longitude: 76.934561
   },
   {
     id: "J4",
@@ -72,7 +72,7 @@ export const THRESHOLDS = {
   JUNCTION_PASSED_ROUTE_BUFFER: 8,    // 8 metres (strict immediate passing)
 
   // Priority zone: distance along road route at which green priority activates
-  PRIORITY_DISTANCE: 100,             // 100 metres
+  PRIORITY_DISTANCE: 8,               // 8 metres (Emergency signal opens when 8m away approaching junction)
 
   // Maximum acceptable raw GPS accuracy before discarding reading
   MAX_RAW_GPS_ACCURACY: 40,           // 40 metres

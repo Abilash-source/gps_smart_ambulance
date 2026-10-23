@@ -6,7 +6,7 @@
  * - OSRM road route calculation & validation
  * - Fixed junction corridor detection (50m) & sequential ordering
  * - Next-junction tracking & passing confirmation (8m buffer)
- * - Single-junction priority management (100m)
+ * - Single-junction priority management (8m approach trigger)
  * - Real-time Firebase database synchronization
  * - Virtual Serial Monitor output matching hardware UART
  */
@@ -18,7 +18,7 @@ import { JunctionManager } from "./junction-manager.js";
 import { PriorityManager } from "./priority-manager.js";
 import { FirebaseService } from "./firebase-service.js";
 import { DashboardUI } from "./dashboard-ui.js";
-import { calculateHeading } from "./route-projection.js";
+import { calculateHeading, interpolatePolyline, getPolylineLength } from "./route-projection.js";
 
 // =====================================================
 // MODULE INSTANCES
@@ -316,7 +316,7 @@ function evaluateRouteAndPriority() {
 
   // 5. Log status changes to Virtual Serial Monitor
   if (priorityPayload.activeJunctionId) {
-    ui.logToSerialMonitor(`[UART] ${priorityPayload.activeJunctionId} status: PRIORITY_ACTIVE (Within 100m)`);
+    ui.logToSerialMonitor(`[UART] ${priorityPayload.activeJunctionId} status: PRIORITY_ACTIVE (Within 8m approaching junction)`);
     ui.logToSerialMonitor(`[UART] ${priorityPayload.activeJunctionId} [GPIO 27] GREEN: HIGH (Emergency Corridor Cleared)`);
   } else if (priorityPayload.nextJunctionId) {
     ui.logToSerialMonitor(`[UART] ${priorityPayload.nextJunctionId} status: NEXT (${Math.round(evalResult.distanceAlongRoute)}m away)`);
@@ -423,32 +423,36 @@ function toggleSimulation() {
   priorityManager.reset();
 
   const coords = currentRouteData.geometry.coordinates;
+  const totalLength = getPolylineLength(coords);
+  // Dense step interpolation (~3 metres per step) so 8m priority trigger & 8m passed transitions are precise
+  const totalSteps = Math.max(30, Math.round(totalLength / 3));
+
   const simBtn = document.getElementById("simButton");
   if (simBtn) simBtn.textContent = "⏸ Pause Simulation Drive";
 
-  ui.logToSerialMonitor("[SIMULATOR] Starting transit drive along road route...");
+  ui.logToSerialMonitor(`[SIMULATOR] Starting transit drive along road route (${Math.round(totalLength)}m, ${totalSteps} simulation steps)...`);
 
   simInterval = setInterval(() => {
-    if (simIndex >= coords.length) {
+    if (simIndex > totalSteps) {
       stopSimulation();
       ui.setMessage("Ambulance arrived at destination hospital!");
       ui.logToSerialMonitor("[SIMULATOR] Trip completed: Arrived at hospital destination.");
       return;
     }
 
-    const lon = coords[simIndex][0];
-    const lat = coords[simIndex][1];
+    const progress = Math.min(1, simIndex / totalSteps);
+    const { point } = interpolatePolyline(coords, progress);
 
     handleIncomingGpsFix({
-      latitude: lat,
-      longitude: lon,
-      accuracy: 10,
+      latitude: point[0],
+      longitude: point[1],
+      accuracy: 8,
       timestamp: Date.now(),
       source: "simulated"
     });
 
     simIndex += 1;
-  }, 350);
+  }, 250);
 }
 
 function stopSimulation() {
