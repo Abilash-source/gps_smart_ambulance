@@ -17,16 +17,16 @@ export function runPriorityManagerTests(assert) {
 
   const passedSet = new Set();
 
-  // Test 1: Approaching J3 from 50m away (outside 8m priority range)
+  // Test 1: Approaching J3 from 50m away (outside 25m priority range)
   const res1 = pManager.evaluatePriority(mockRouteJunctions[0], 50, mockRouteJunctions, passedSet, true);
-  assert.equal(res1.activeJunctionId, null, "Active junction should be null when > 8m away");
+  assert.equal(res1.activeJunctionId, null, "Active junction should be null when > 25m away");
   assert.equal(res1.nextJunctionId, "J3", "Next junction should be J3");
-  assert.equal(res1.states.J3.status, "NEXT", "J3 status should be NEXT when approaching > 8m");
+  assert.equal(res1.states.J3.status, "NEXT", "J3 status should be NEXT when approaching > 25m");
   assert.equal(res1.states.J1.status, "WAITING", "J1 status should be WAITING");
 
-  // Test 2: Ambulance closes in to 6m from J3 (inside 8m priority trigger range)
-  const res2 = pManager.evaluatePriority(mockRouteJunctions[0], 6, mockRouteJunctions, passedSet, true);
-  assert.equal(res2.activeJunctionId, "J3", "Active junction MUST be J3 within 8m");
+  // Test 2: Ambulance closes in to 15m from J3 (inside 25m priority trigger range)
+  const res2 = pManager.evaluatePriority(mockRouteJunctions[0], 15, mockRouteJunctions, passedSet, true);
+  assert.equal(res2.activeJunctionId, "J3", "Active junction MUST be J3 within 25m");
   assert.equal(res2.states.J3.status, "PRIORITY_ACTIVE", "J3 status MUST be PRIORITY_ACTIVE (Emergency signal open)");
   assert.equal(res2.states.J1.status, "WAITING", "Only 1 junction can be active. J1 must remain WAITING");
 

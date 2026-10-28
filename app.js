@@ -72,7 +72,7 @@ const junctions = [
 // Threshold Constants (Sections 7, 9, 10, 11)
 const JUNCTION_ROUTE_RADIUS = 50;           // 50m perpendicular corridor limit
 const JUNCTION_PASSED_ROUTE_BUFFER = 8;     // 8m passed buffer along route (per user requirement)
-const PRIORITY_DISTANCE = 8;                // 8m priority trigger distance (Emergency signal opens 8m away)
+const PRIORITY_DISTANCE = 25;               // 25m priority trigger distance (Reliable approach trigger zone)
 const MAX_RAW_GPS_ACCURACY = 40;            // Max acceptable raw GPS accuracy
 const REQUIRED_STABILIZED_ACCURACY = 25;    // Required stabilized accuracy
 const GPS_FIX_WINDOW_SIZE = 5;
@@ -512,6 +512,10 @@ async function calculateRoute(options = {}) {
         if (routeTimeElement) routeTimeElement.textContent = formatRouteTime(route.duration);
         if (routeStatusElement) routeStatusElement.textContent = "ROUTE READY";
 
+        // Synchronize ambulance route progress to current ambulance position on the new route
+        const ambProj = projectPointOntoRoute(ambLat, ambLon, route.geometry.coordinates);
+        lastAmbulanceRoutePosition = ambProj ? ambProj.routePosition : 0;
+
         // Analyze and sequence fixed junctions
         analyzeRouteJunctions(route.geometry.coordinates);
 
@@ -529,18 +533,20 @@ async function calculateRoute(options = {}) {
     }
 }
 
-// Controlled Recalculation Check (Section 11)
+// Off-route Recalculation Check (Section 11)
 function shouldRecalculateRoute() {
-    if (!routeData || !lastRouteOrigin || !currentAmbulanceLocation || routeRequestInProgress) return false;
+    if (!routeData || !currentAmbulanceLocation || routeRequestInProgress) return false;
     if (Date.now() - lastRouteCalculatedAt < ROUTE_RECALCULATE_INTERVAL) return false;
 
-    const d = calculateHaversineDistance(
-        lastRouteOrigin.latitude,
-        lastRouteOrigin.longitude,
+    // Recalculate ONLY if vehicle has deviated off the road corridor (> 35m)
+    const proj = projectPointOntoRoute(
         currentAmbulanceLocation.latitude,
-        currentAmbulanceLocation.longitude
+        currentAmbulanceLocation.longitude,
+        routeData.geometry.coordinates
     );
-    return d >= ROUTE_RECALCULATE_DISTANCE;
+    if (!proj) return false;
+
+    return proj.distanceToRoute > 35;
 }
 
 function requestControlledRouteRecalculation() {

@@ -7,7 +7,7 @@
  */
 
 import { OSRM_BASE_URL, THRESHOLDS } from "./config.js";
-import { calculateHaversineDistance } from "./route-projection.js";
+import { calculateHaversineDistance, projectPointOntoPolyline } from "./route-projection.js";
 
 /**
  * Requests an actual road-based driving route between start and destination coordinates.
@@ -81,18 +81,21 @@ export async function fetchDrivingRoute(startLat, startLon, destLat, destLon) {
 }
 
 /**
- * Checks whether controlled route recalculation criteria are satisfied (Section 11).
+ * Checks whether off-route recalculation criteria are satisfied (Section 11).
  * Recalculates ONLY if:
- * 1. Vehicle has moved at least 25 metres from previous origin.
- * 2. At least 10 seconds have elapsed since previous calculation.
+ * 1. At least 10 seconds have elapsed since previous calculation.
+ * 2. The vehicle has actually deviated off the planned road corridor (> 35m).
+ * While vehicle is driving along the planned road corridor, the route remains stable!
  * 
- * @param {{ latitude: number, longitude: number } | null} lastOrigin
  * @param {{ latitude: number, longitude: number }} currentCoord
+ * @param {{ coordinates: Array<[number, number]> } | null} routeGeometry
  * @param {number} lastCalculatedTimestamp
  * @returns {boolean}
  */
-export function shouldRecalculateRoute(lastOrigin, currentCoord, lastCalculatedTimestamp) {
-  if (!lastOrigin || !currentCoord) return false;
+export function shouldRecalculateRoute(currentCoord, routeGeometry, lastCalculatedTimestamp) {
+  if (!currentCoord || !routeGeometry || !Array.isArray(routeGeometry.coordinates) || routeGeometry.coordinates.length < 2) {
+    return false;
+  }
 
   const now = Date.now();
   const timeElapsed = now - lastCalculatedTimestamp;
@@ -100,14 +103,11 @@ export function shouldRecalculateRoute(lastOrigin, currentCoord, lastCalculatedT
     return false;
   }
 
-  const distanceMoved = calculateHaversineDistance(
-    lastOrigin.latitude,
-    lastOrigin.longitude,
-    currentCoord.latitude,
-    currentCoord.longitude
-  );
+  const proj = projectPointOntoPolyline(currentCoord.latitude, currentCoord.longitude, routeGeometry.coordinates);
+  if (!proj) return false;
 
-  return distanceMoved >= THRESHOLDS.ROUTE_RECALCULATE_DISTANCE;
+  // Recalculate ONLY if ambulance has drifted off the road path by > 35m
+  return proj.distanceToRoute > 35;
 }
 
 /**

@@ -59,11 +59,11 @@ export class PriorityManager {
       this.activePriorityJunctionId = null;
     }
 
-    // Priority condition: Emergency signal opens when approaching within 8m of next junction along road
+    // Priority condition: Emergency signal opens when approaching within 25m of next junction along road
     if (distanceAlongRoute <= THRESHOLDS.PRIORITY_DISTANCE && distanceAlongRoute >= -THRESHOLDS.JUNCTION_PASSED_ROUTE_BUFFER) {
       this.activePriorityJunctionId = nextJunction.id;
     } else {
-      // Vehicle is outside 8m trigger zone
+      // Vehicle is outside 25m trigger zone
       this.activePriorityJunctionId = null;
     }
 

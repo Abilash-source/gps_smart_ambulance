@@ -72,7 +72,7 @@ export const THRESHOLDS = {
   JUNCTION_PASSED_ROUTE_BUFFER: 8,    // 8 metres (strict immediate passing)
 
   // Priority zone: distance along road route at which green priority activates
-  PRIORITY_DISTANCE: 8,               // 8 metres (Emergency signal opens when 8m away approaching junction)
+  PRIORITY_DISTANCE: 25,              // 25 metres (Reliable approach trigger zone for live GPS)
 
   // Maximum acceptable raw GPS accuracy before discarding reading
   MAX_RAW_GPS_ACCURACY: 40,           // 40 metres

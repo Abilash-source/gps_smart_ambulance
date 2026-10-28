@@ -31,11 +31,14 @@ export class JunctionManager {
 
   /**
    * Identifies and orders fixed junctions along a newly calculated road route polyline.
+   * Synchronizes ambulance route progress on the new route to prevent desynchronization.
    * 
    * @param {Array<[number, number]>} routeCoordinates GeoJSON [longitude, latitude]
+   * @param {number | null} currentAmbulanceLat
+   * @param {number | null} currentAmbulanceLon
    * @returns {Array<{ id: string, name: string, latitude: number, longitude: number, distanceToRoute: number, routePosition: number }>}
    */
-  analyzeRouteJunctions(routeCoordinates) {
+  analyzeRouteJunctions(routeCoordinates, currentAmbulanceLat = null, currentAmbulanceLon = null) {
     if (!Array.isArray(routeCoordinates) || routeCoordinates.length < 2) {
       this.routeJunctions = [];
       return [];
@@ -59,6 +62,15 @@ export class JunctionManager {
     // Sort sequentially from ambulance origin (0m) toward destination hospital
     matched.sort((a, b) => a.routePosition - b.routePosition);
     this.routeJunctions = matched;
+
+    // Crucial: Synchronize ambulance route progress to the current ambulance position on the NEW route!
+    // Prevents old cumulative distances from falsely marking upcoming junctions as passed.
+    if (currentAmbulanceLat !== null && currentAmbulanceLon !== null) {
+      const ambProj = projectPointOntoPolyline(currentAmbulanceLat, currentAmbulanceLon, routeCoordinates);
+      this.lastAmbulanceRoutePosition = ambProj ? ambProj.routePosition : 0;
+    } else {
+      this.lastAmbulanceRoutePosition = 0;
+    }
 
     return this.routeJunctions;
   }

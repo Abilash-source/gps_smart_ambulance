@@ -162,8 +162,8 @@ function handleIncomingGpsFix(fix) {
   if (currentRouteData && currentRouteData.geometry) {
     evaluateRouteAndPriority();
 
-    // Check if controlled route recalculation is warranted (moved >= 25m AND >= 10s passed)
-    if (shouldRecalculateRoute(lastRouteOrigin, currentAmbulanceLocation, lastRouteCalculatedAt)) {
+    // Check if off-route recalculation is warranted (only if ambulance drifts > 35m off planned road)
+    if (shouldRecalculateRoute(currentAmbulanceLocation, currentRouteData.geometry, lastRouteCalculatedAt)) {
       calculateRoadRoute(true);
     }
   }
@@ -241,8 +241,12 @@ async function calculateRoadRoute(isAutomatic = false) {
     // Draw route geometry on map
     ui.drawRoadRoute(result.route.geometry);
 
-    // Identify and order fixed junctions along the route (<= 50m)
-    const matchedJunctions = junctionManager.analyzeRouteJunctions(result.route.geometry.coordinates);
+    // Identify and order fixed junctions along the route (<= 50m) and sync progress
+    const matchedJunctions = junctionManager.analyzeRouteJunctions(
+      result.route.geometry.coordinates,
+      currentAmbulanceLocation.latitude,
+      currentAmbulanceLocation.longitude
+    );
 
     ui.logToSerialMonitor(`[ROUTING] Route calculated: ${result.route.distance}m • ETA: ${Math.round(result.route.duration / 60)} min`);
     ui.logToSerialMonitor(`[JUNCTIONS] Found ${matchedJunctions.length} fixed junctions within 50m corridor: ${matchedJunctions.map((j) => j.id).join(" -> ") || "None"}`);
